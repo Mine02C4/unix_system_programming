@@ -21,6 +21,13 @@ struct buf_header {
 };
 
 extern struct buf_header *hash_search(int);
+extern void remove_hash(struct buf_header *);
+extern int free_is_empty();
+extern struct buf_header *get_first_free();
+extern void remove_buffer_from_free_list(struct buf_header *);
+extern void enqueue_buffer_at_head(struct buf_header *);
+extern void enqueue_buffer_at_end(struct buf_header *);
+extern void insert_buffer(struct buf_header *);
 
 #endif /* BUFFER_H_ */
 
