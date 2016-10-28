@@ -1,18 +1,51 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAX_LINE 256
 
 extern void getargs(char*, int, int*, char**);
 
-int main()
+void helpcmd(int, char**);
+void initcmd(int, char**);
+void bufcmd(int, char**);
+void hashcmd(int, char**);
+void freecmd(int, char**);
+void getblkcmd(int, char**);
+void brelsecmd(int, char**);
+void setcmd(int, char**);
+void resetcmd(int, char**);
+void quitcmd(int, char**);
+
+typedef void (* cmdfuncptr)(int, char**);
+
+struct cmdinfo {
+  char *name;
+  cmdfuncptr func;
+};
+
+const struct cmdinfo cmdarray[] = {
+  {"help",    helpcmd},
+  {"init",    initcmd},
+  {"buf",     bufcmd},
+  {"hash",    hashcmd},
+  {"free",    initcmd},
+  {"getblk",  getblkcmd},
+  {"brelse",  brelsecmd},
+  {"set",     setcmd},
+  {"reset",   resetcmd},
+  {"quit",    quitcmd},
+};
+
+int
+main()
 {
   char line[MAX_LINE];
   while (1) {
     printf("$ ");
     fflush(stdout);
     if (fgets(line, MAX_LINE, stdin) == NULL) {
-      // TODO: error
-      fprintf(stderr, "Error\n");
+      fprintf(stderr, "Input error when fgets.\n");
       return 1;
     }
     int argc;
@@ -23,7 +56,71 @@ int main()
     for (i = 0; i < argc; i++) {
       printf("%s\n", argv[i]);
     }
+    if (argc > 0) {
+      int validcmd = 0;
+      for (i = 0; i < sizeof(cmdarray) / sizeof(cmdarray[0]); i++) {
+        if (strcmp(cmdarray[i].name, argv[0]) == 0) {
+          validcmd = 1;
+          cmdarray[i].func(argc, argv);
+          break;
+        }
+      }
+      if (!validcmd) {
+        fprintf(stderr, "Unkown command '%s'.\n", argv[0]);
+      }
+    }
   }
   return 0;
+}
+
+void
+helpcmd(int argc, char** argv)
+{
+}
+
+void
+initcmd(int argc, char** argv)
+{
+}
+
+void
+bufcmd(int argc, char** argv)
+{
+}
+
+void
+hashcmd(int argc, char** argv)
+{
+}
+
+void
+freecmd(int argc, char** argv)
+{
+}
+
+void
+getblkcmd(int argc, char** argv)
+{
+}
+
+void
+brelsecmd(int argc, char** argv)
+{
+}
+
+void
+setcmd(int argc, char** argv)
+{
+}
+
+void
+resetcmd(int argc, char** argv)
+{
+}
+
+void
+quitcmd(int argc, char** argv)
+{
+  exit(0);
 }
 
