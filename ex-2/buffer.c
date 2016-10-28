@@ -1,4 +1,5 @@
-#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "buffer.h"
 
@@ -92,5 +93,24 @@ insert_buffer(struct buf_header *p)
 {
   int h = hash(p->blkno);
   insert_bottom(&hash_head[h], p);
+}
+
+void
+init_buffer()
+{
+  const int inserts[] = {28, 4, 64, 17, 5, 97, 98, 50, 10, 3, 35, 99};
+  const int insert_size = sizeof(inserts) / sizeof(int);
+  const int free_array[] = {3, 5, 4, 28, 97, 10};
+  int i;
+  for (i = 0; i < insert_size; i++) {
+    struct buf_header *p;
+    if ((p = (struct buf_header *)malloc(sizeof(struct buf_header))) == NULL) {
+      fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
+      exit(1);
+    }
+    p->blkno = inserts[i];
+    insert_buffer(p);
+  }
+
 }
 
