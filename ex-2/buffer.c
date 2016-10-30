@@ -159,6 +159,19 @@ print_buffer(int number)
 }
 
 void
+print_hash(int h)
+{
+  printf("%d: ", h);
+  struct buf_header *p;
+  for (p = hash_head[h].hash_fp; p != &hash_head[h]; p = p->hash_fp) {
+    print_buf_header(p);
+    if (p != &free_head)
+      putchar(' ');
+  }
+  putchar('\n');
+}
+
+void
 print_free()
 {
   struct buf_header *p;

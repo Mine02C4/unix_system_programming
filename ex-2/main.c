@@ -13,6 +13,7 @@ extern void getargs(char*, int, int*, char**);
 extern void init_head();
 extern void init_buffer();
 extern void print_buffer(int);
+extern void print_hash(int);
 extern void print_free();
 
 void helpcmd(int, char**);
@@ -140,6 +141,40 @@ bufcmd(int argc, char** argv)
 void
 hashcmd(int argc, char** argv)
 {
+  if (argc == 1) {
+    int i;
+    for (i = 0; i < NHASH; i++) {
+      print_hash(i);
+    }
+  } else {
+    int i;
+    int *hasharr;
+    if ((hasharr = (int *)malloc(sizeof(int) * (argc - 1))) == NULL) {
+      fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
+      exit(1);
+    }
+    for (i = 1; i < argc; i++) {
+      char *endp;
+      int n = strtol(argv[i], &endp, 10);
+      if (*endp == '\0') {
+        if (n >= 0 && n < NHASH) {
+          hasharr[i - 1] = n;
+        } else {
+          fprintf(stderr, "Invalid argument: '%d' is out of range [0,%d].\n", n, NHASH - 1);
+          free(hasharr);
+          return;
+        }
+      } else {
+        fprintf(stderr, "Invalid argument: '%s' is not a number.\n", argv[i]);
+        free(hasharr);
+        return;
+      }
+    }
+    for (i = 0; i < argc - 1; i++) {
+      print_buffer(hasharr[i]);
+    }
+    free(hasharr);
+  }
 }
 
 void
