@@ -6,6 +6,7 @@
 static struct buf_header hash_head[NHASH];
 static struct buf_header free_head;
 static struct buf_header *buf_area = NULL;
+int buffer_size = 0;
 
 inline static int
 hash(int blkno)
@@ -122,6 +123,7 @@ init_buffer()
     fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
     exit(1);
   }
+  buffer_size = insert_size;
   for (i = 0; i < insert_size; i++) {
     struct buf_header *p = &buf_area[i];
     p->blkno = inserts[i];
@@ -134,5 +136,19 @@ init_buffer()
     p->stat &= ~STAT_LOCKED;
     enqueue_buffer_at_end(p);
   }
+}
+
+void
+print_buffer(int number)
+{
+  struct buf_header *p = &buf_area[number];
+  printf("[%2d:%3d %c%c%c%c%c%c]\n", number, p->blkno,
+      p->stat & STAT_OLD     ? 'O' : '-',
+      p->stat & STAT_WAITED  ? 'W' : '-',
+      p->stat & STAT_KRDWR   ? 'K' : '-',
+      p->stat & STAT_DWR     ? 'D' : '-',
+      p->stat & STAT_VALID   ? 'V' : '-',
+      p->stat & STAT_LOCKED  ? 'L' : '-'
+  );
 }
 

@@ -2,10 +2,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "buffer.h"
+
 #define MAX_LINE 256
 
+extern int buffer_size;
+
 extern void getargs(char*, int, int*, char**);
+
+extern void init_head();
 extern void init_buffer();
+extern void print_buffer(int);
 
 void helpcmd(int, char**);
 void initcmd(int, char**);
@@ -53,12 +60,8 @@ main()
     int argc;
     char *argv[MAX_LINE];
     getargs(line, MAX_LINE, &argc, argv);
-    int i;
-    printf("argc = %d\n", argc);
-    for (i = 0; i < argc; i++) {
-      printf("%s\n", argv[i]);
-    }
     if (argc > 0 && argv[0][0] != '\0') {
+      int i;
       int validcmd = 0;
       for (i = 0; i < sizeof(cmdarray) / sizeof(cmdarray[0]); i++) {
         if (strcmp(cmdarray[i].name, argv[0]) == 0) {
@@ -97,6 +100,40 @@ initcmd(int argc, char** argv)
 void
 bufcmd(int argc, char** argv)
 {
+  if (argc == 1) {
+    int i;
+    for (i = 0; i < buffer_size; i++) {
+      print_buffer(i);
+    }
+  } else {
+    int i;
+    int *bufarr;
+    if ((bufarr = (int *)malloc(sizeof(int) * (argc - 1))) == NULL) {
+      fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
+      exit(1);
+    }
+    for (i = 1; i < argc; i++) {
+      char *endp;
+      int n = strtol(argv[i], &endp, 10);
+      if (*endp == '\0') {
+        if (n >= 0 && n < buffer_size) {
+          bufarr[i - 1] = n;
+        } else {
+          fprintf(stderr, "Invalid argument: '%d' is out of range [0,%d].\n", n, buffer_size - 1);
+          free(bufarr);
+          return;
+        }
+      } else {
+        fprintf(stderr, "Invalid argument: '%s' is not a number.\n", argv[i]);
+        free(bufarr);
+        return;
+      }
+    }
+    for (i = 0; i < argc - 1; i++) {
+      print_buffer(bufarr[i]);
+    }
+    free(bufarr);
+  }
 }
 
 void
