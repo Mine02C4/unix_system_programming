@@ -25,7 +25,6 @@ getblk(int blkno)
       if (free_is_empty()) {
         /* Scenario 4 */
         printf("Scenario 4\n");
-        p->stat |= STAT_WAITED;
         // sleep(event any buffer becomes free);
         printf("Process goes to sleep\n");
         return NULL;
