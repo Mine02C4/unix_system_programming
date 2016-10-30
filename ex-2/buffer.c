@@ -5,11 +5,24 @@
 
 static struct buf_header hash_head[NHASH];
 static struct buf_header free_head;
+static struct buf_header *buf_area = NULL;
 
-inline int
+inline static int
 hash(int blkno)
 {
   return blkno % NHASH;
+}
+
+void
+init_head()
+{
+  int i;
+  for (i = 0; i < NHASH; i++) {
+    hash_head[i].hash_fp = &hash_head[i];
+    hash_head[i].hash_bp = &hash_head[i];
+  }
+  free_head.free_fp = &free_head;
+  free_head.free_bp = &free_head;
 }
 
 struct buf_header *
@@ -17,7 +30,6 @@ hash_search(int blkno)
 {
   int h;
   struct buf_header *p;
-
   h = hash(blkno);
   for (p = hash_head[h].hash_fp; p != &hash_head[h]; p = p->hash_fp) {
     if (p->blkno == blkno)
@@ -98,19 +110,29 @@ insert_buffer(struct buf_header *p)
 void
 init_buffer()
 {
+  if (buf_area != NULL)
+    free(buf_area);
+  init_head();
   const int inserts[] = {28, 4, 64, 17, 5, 97, 98, 50, 10, 3, 35, 99};
   const int insert_size = sizeof(inserts) / sizeof(int);
   const int free_array[] = {3, 5, 4, 28, 97, 10};
+  const int free_size = sizeof(free_array) / sizeof(int);
   int i;
+  if ((buf_area = (struct buf_header *)malloc(sizeof(struct buf_header) * insert_size)) == NULL) {
+    fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
+    exit(1);
+  }
   for (i = 0; i < insert_size; i++) {
-    struct buf_header *p;
-    if ((p = (struct buf_header *)malloc(sizeof(struct buf_header))) == NULL) {
-      fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
-      exit(1);
-    }
+    struct buf_header *p = &buf_area[i];
     p->blkno = inserts[i];
+    p->stat = STAT_VALID | STAT_LOCKED;
     insert_buffer(p);
   }
-
+  for (i = 0; i < free_size; i++) {
+    struct buf_header *p;
+    p = hash_search(free_array[i]);
+    p->stat &= ~STAT_LOCKED;
+    enqueue_buffer_at_end(p);
+  }
 }
 

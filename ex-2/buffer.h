@@ -20,6 +20,7 @@ struct buf_header {
   char *cache_data;
 };
 
+extern void init_head();
 extern struct buf_header *hash_search(int);
 extern void remove_hash(struct buf_header *);
 extern int free_is_empty();

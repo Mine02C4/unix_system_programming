@@ -42,6 +42,7 @@ int
 main()
 {
   char line[MAX_LINE];
+  init_head();
   while (1) {
     printf("$ ");
     fflush(stdout);
@@ -90,6 +91,7 @@ helpcmd(int argc, char** argv)
 void
 initcmd(int argc, char** argv)
 {
+  init_buffer();
 }
 
 void
