@@ -9,6 +9,7 @@
 extern int buffer_size;
 
 extern void getargs(char*, int, int*, char**);
+extern struct buf_header *getblk(int);
 
 extern void init_head();
 extern void init_buffer();
@@ -186,6 +187,20 @@ freecmd(int argc, char** argv)
 void
 getblkcmd(int argc, char** argv)
 {
+  if (argc == 2) {
+    char *endp;
+    int n = strtol(argv[1], &endp, 10);
+    if (*endp == '\0') {
+      struct buf_header *p;
+      if ((p = getblk(n)) == NULL) {
+        fprintf(stderr, "getblk(%d) returns NULL.\n", n);
+      }
+    } else {
+      fprintf(stderr, "Invalid argument: '%s' is not a number.\n", argv[1]);
+    }
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires 1 parameter. Please see help.\n", argv[0]);
+  }
 }
 
 void
