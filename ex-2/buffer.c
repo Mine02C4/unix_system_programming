@@ -154,15 +154,8 @@ print_buf_header(const struct buf_header *p)
 void
 print_buffer(int number)
 {
-  struct buf_header *p = &buf_area[number];
-  printf("[%2d:%3d %c%c%c%c%c%c]\n", number, p->blkno,
-      p->stat & STAT_OLD     ? 'O' : '-',
-      p->stat & STAT_WAITED  ? 'W' : '-',
-      p->stat & STAT_KRDWR   ? 'K' : '-',
-      p->stat & STAT_DWR     ? 'D' : '-',
-      p->stat & STAT_VALID   ? 'V' : '-',
-      p->stat & STAT_LOCKED  ? 'L' : '-'
-  );
+  print_buf_header(&buf_area[number]);
+  putchar('\n');
 }
 
 void
