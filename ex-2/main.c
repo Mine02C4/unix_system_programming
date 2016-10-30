@@ -228,6 +228,53 @@ brelsecmd(int argc, char** argv)
 void
 setcmd(int argc, char** argv)
 {
+  if (argc >= 3) {
+    char *endp;
+    int n = strtol(argv[1], &endp, 10);
+    if (*endp == '\0') {
+      struct buf_header *p;
+      if ((p = hash_search(n)) == NULL) {
+        fprintf(stderr, "Not found: Block '%d' is not found.\n", n);
+      } else {
+        int i, j;
+        unsigned int s = 0x0;
+        for (i = 2; i < argc; i++) {
+          int len = strlen(argv[i]);
+          for (j = 0; j < len; j++) {
+            switch (argv[i][j]) {
+              case 'L':
+                s |= STAT_LOCKED;
+                break;
+              case 'V':
+                s |= STAT_VALID;
+                break;
+              case 'D':
+                s |= STAT_DWR;
+                break;
+              case 'K':
+                s |= STAT_KRDWR;
+                break;
+              case 'W':
+                s |= STAT_WAITED;
+                break;
+              case 'O':
+                s |= STAT_OLD;
+                break;
+              default:
+                fprintf(stderr, "Invalid argument: '%c' is unknown stat. Please see help.\n", argv[i][j]);
+                return;
+            }
+          }
+          p->stat |= s;
+        }
+      }
+    } else {
+      fprintf(stderr, "Invalid argument: '%s' is not a number.\n", argv[1]);
+    }
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires at least 2 parameters. Please see help.\n",
+        argv[0]);
+  }
 }
 
 void
