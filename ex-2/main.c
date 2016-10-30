@@ -13,6 +13,7 @@ extern void getargs(char*, int, int*, char**);
 extern void init_head();
 extern void init_buffer();
 extern void print_buffer(int);
+extern void print_free();
 
 void helpcmd(int, char**);
 void initcmd(int, char**);
@@ -37,7 +38,7 @@ const struct cmdinfo cmdarray[] = {
   {"init",    initcmd},
   {"buf",     bufcmd},
   {"hash",    hashcmd},
-  {"free",    initcmd},
+  {"free",    freecmd},
   {"getblk",  getblkcmd},
   {"brelse",  brelsecmd},
   {"set",     setcmd},
@@ -144,6 +145,7 @@ hashcmd(int argc, char** argv)
 void
 freecmd(int argc, char** argv)
 {
+  print_free();
 }
 
 void

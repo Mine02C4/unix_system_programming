@@ -139,6 +139,19 @@ init_buffer()
 }
 
 void
+print_buf_header(const struct buf_header *p)
+{
+  printf("[%2d:%3d %c%c%c%c%c%c]", p - buf_area, p->blkno,
+      p->stat & STAT_OLD     ? 'O' : '-',
+      p->stat & STAT_WAITED  ? 'W' : '-',
+      p->stat & STAT_KRDWR   ? 'K' : '-',
+      p->stat & STAT_DWR     ? 'D' : '-',
+      p->stat & STAT_VALID   ? 'V' : '-',
+      p->stat & STAT_LOCKED  ? 'L' : '-'
+  );
+}
+
+void
 print_buffer(int number)
 {
   struct buf_header *p = &buf_area[number];
@@ -150,5 +163,17 @@ print_buffer(int number)
       p->stat & STAT_VALID   ? 'V' : '-',
       p->stat & STAT_LOCKED  ? 'L' : '-'
   );
+}
+
+void
+print_free()
+{
+  struct buf_header *p;
+  for (p = free_head.free_fp; p != &free_head; p = p->free_fp) {
+    print_buf_header(p);
+    if (p != &free_head)
+      putchar(' ');
+  }
+  putchar('\n');
 }
 
