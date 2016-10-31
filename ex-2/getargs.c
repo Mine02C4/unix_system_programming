@@ -7,7 +7,7 @@ getargs(char *input, int max, int *argc, char *argv[])
 {
   int i;
   *argc = 0;
-  int npos = 0, prev_skip = 0;
+  int npos = 0, prev_skip = 1;
   for (i = 0; i < max; i++) {
     if (input[i] == '\0') {
       if (prev_skip == 0) {
