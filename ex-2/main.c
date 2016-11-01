@@ -90,10 +90,25 @@ helpcmd(int argc, char** argv)
   printf("help\n");
   printf("  Show this help.\n\n");
   printf("init\n");
-  printf("  Initialize buffer cache.\n\n");
+  printf("  Initialize buffer cache. View [figure 2.15] of textbook.\n\n");
   printf("buf [n ...]\n");
   printf("  If no argument was given, show all buffer state.\n");
   printf("  If arguments were given, show buffers state which were shown by arguments 'n'.\n\n");
+  printf("hash [n ...]\n");
+  printf("  If no argument was given, show all hash list.\n");
+  printf("  If arguments were given, show show hash list which were shown by arguments 'n'.\n\n");
+  printf("free\n");
+  printf("  Show free list.\n\n");
+  printf("getblk n\n");
+  printf("  Execute getblk(n). 'n' is given logical block number.\n\n");
+  printf("brelse n\n");
+  printf("  Execute brelse(bp). 'bp' is pointer to buffer header of logical block number 'n'.\n\n");
+  printf("set n stat [stat ...]\n");
+  printf("  Set state given 'stat's to buffer of logical block number 'n'.\n\n");
+  printf("reset n stat [stat ...]\n");
+  printf("  Reset state given 'stat's to buffer of logical block number 'n'.\n\n");
+  printf("quit\n");
+  printf("  Quit from this software.\n\n");
 }
 
 void
