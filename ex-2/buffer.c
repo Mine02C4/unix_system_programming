@@ -141,7 +141,7 @@ init_buffer()
 void
 print_buf_header(const struct buf_header *p)
 {
-  printf("[%2d:%3d %c%c%c%c%c%c]", p - buf_area, p->blkno,
+  printf("[%2d:%3d %c%c%c%c%c%c]", (int)(p - buf_area), p->blkno,
       p->stat & STAT_OLD     ? 'O' : '-',
       p->stat & STAT_WAITED  ? 'W' : '-',
       p->stat & STAT_KRDWR   ? 'K' : '-',

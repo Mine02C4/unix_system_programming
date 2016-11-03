@@ -35,8 +35,9 @@ getblk(int blkno)
       if (p->stat & STAT_DWR) {
         /* Scenario 3 */
         printf("Scenario 3\n");
-        p->stat |= STAT_OLD;
         // asynchronous write buffer to disk;
+        p->stat &= ~STAT_DWR;
+        p->stat |= STAT_KRDWR | STAT_OLD;
         continue;
       }
       /* Scenario 2 */
