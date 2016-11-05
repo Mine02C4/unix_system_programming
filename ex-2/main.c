@@ -1,3 +1,4 @@
+/* 61414050 Naoya Niwa */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
