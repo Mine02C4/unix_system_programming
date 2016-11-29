@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -29,14 +30,9 @@ main(const int margc, const char *margv[], const char *menvp[])
       fprintf(stderr, "Input is too long. Max = %d.\n", MAX_LINE - 2);
       continue;
     }
-    int argc;
+    int argc, i, error_flag = 0;
     char *argv[MAX_LINE];
     getargs(line, MAX_LINE, argbuf, &argc, argv);
-    int i;
-    for (i = 0; i < argc; i++) {
-      printf("'%s',", argv[i]);
-    }
-    putchar('\n');
     if (argc == 0) {
       continue;
     }
@@ -61,7 +57,7 @@ main(const int margc, const char *margv[], const char *menvp[])
     if (argv[argc - 1][strlen(argv[argc - 1]) - 1] == '&') {
       background = 1;
       if (strlen(argv[argc - 1]) == 1) {
-        argv[argc - 1] = NULL;
+        argv[--argc] = NULL;
       } else {
         argv[argc - 1][strlen(argv[argc - 1]) - 1] = '\0';
         argv[argc] = NULL;
@@ -69,6 +65,73 @@ main(const int margc, const char *margv[], const char *menvp[])
     } else {
       argv[argc] = NULL;
     }
+    char *redirect_stdin = NULL;
+    char *redirect_stdout = NULL;
+    const static char *specialcs = "><|";
+    for (i = 0; i < argc; i++) {
+      int j;
+      if (strcmp(argv[i], "<") == 0) {
+        if (i + 1 >= argc) {
+          fprintf(stderr, "Syntax error\n");
+          error_flag = 1;
+          break;
+        }
+        redirect_stdin = argv[i + 1];
+        for (j = 0; specialcs[j] != '\0'; j++) {
+          if (redirect_stdin[0] == specialcs[j]) {
+            fprintf(stderr, "Syntax error\n");
+            error_flag = 1;
+            break;
+          }
+        }
+        if (error_flag) {
+          break;
+        }
+        argv[i] = NULL;
+        argv[i + 1] = NULL;
+        i++;
+      } else if (strcmp(argv[i], ">") == 0) {
+        if (i + 1 >= argc) {
+          fprintf(stderr, "Syntax error\n");
+          error_flag = 1;
+          break;
+        }
+        redirect_stdout = argv[i + 1];
+        for (j = 0; specialcs[j] != '\0'; j++) {
+          if (redirect_stdout[0] == specialcs[j]) {
+            fprintf(stderr, "Syntax error\n");
+            error_flag = 1;
+            break;
+          }
+        }
+        if (error_flag) {
+          break;
+        }
+        argv[i] = NULL;
+        argv[i + 1] = NULL;
+        i++;
+      }
+    }
+    if (error_flag) {
+      continue;
+    }
+    {
+      int d = 0;
+      for (i = 0; i < argc; i++) {
+        if (argv[i] == NULL) {
+          d++;
+          continue;
+        }
+        if (d > 0) {
+          argv[i - d] = argv[i];
+        }
+      }
+      argv[argc - d] = NULL;
+    }
+    for (i = 0; i < argc; i++) {
+      printf("'%s',", argv[i]);
+    }
+    putchar('\n');
     int pid;
     if ((pid = fork()) != 0) {
       if (background == 0) {
@@ -76,9 +139,33 @@ main(const int margc, const char *margv[], const char *menvp[])
         wait(&status);
       }
     } else {
+      if (redirect_stdin != NULL) {
+        int infd = open(redirect_stdin, O_RDONLY);
+        if (infd == -1) {
+          fprintf(stderr, "Error stdin redirect: %s\n", strerror(errno));
+          return errno;
+        }
+        close(0);
+        if (dup(infd) == -1) {
+          fprintf(stderr, "Error stdin redirect: %s\n", strerror(errno));
+          return errno;
+        }
+      }
+      if (redirect_stdout != NULL) {
+        int outfd = open(redirect_stdout, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+        if (outfd == -1) {
+          fprintf(stderr, "Error stdout redirect: %s\n", strerror(errno));
+          return errno;
+        }
+        close(1);
+        if (dup(outfd) == -1) {
+          fprintf(stderr, "Error stdout redirect: %s\n", strerror(errno));
+          return errno;
+        }
+      }
       execvp(argv[0], argv);
       fprintf(stderr, "Error execvp: %s\n", strerror(errno));
-      return 0;
+      return errno;
     }
   }
   return 0;
