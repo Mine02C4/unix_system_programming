@@ -27,6 +27,12 @@ main(const int margc, const char *margv[], const char *menvp[])
   char line[MAX_LINE];
   char argbuf[MAX_LINE * 2];
   struct child_proc childs[MAX_PIPE];
+  sigset_t block, oblock;
+  sigaddset(&block, SIGINT);
+  if (sigprocmask(SIG_BLOCK, &block, &oblock) == -1) {
+    fprintf(stderr, "Error sigprocmask: %s\n", strerror(errno));
+    return errno;
+  }
   while (1) {
     printf("$ ");
     fflush(stdout);
@@ -230,6 +236,10 @@ main(const int margc, const char *margv[], const char *menvp[])
             fprintf(stderr, "Error stdout redirect: %s\n", strerror(errno));
             return errno;
           }
+        }
+        if (sigprocmask(SIG_SETMASK, &oblock, NULL) == -1) {
+          fprintf(stderr, "Error sigprocmask: %s\n", strerror(errno));
+          return errno;
         }
         execvp(childs[i].argv[0], childs[i].argv);
         fprintf(stderr, "Error execvp: %s\n", strerror(errno));
