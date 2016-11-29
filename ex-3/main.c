@@ -176,14 +176,37 @@ main(const int margc, const char *margv[], const char *menvp[])
       printf("'%s',", argv[i]);
     }
     putchar('\n');
+    int pipes[MAX_PIPE][2];
+    for (i = 0; i < pipe_n; i++) {
+      if (pipe(pipes[i]) == -1) {
+        fprintf(stderr, "Error open pipe: %s\n", strerror(errno));
+        return errno;
+      }
+    }
     for (i = 0; i <= pipe_n; i++) {
       int pid;
       if ((pid = fork()) != 0) {
-        if (background == 0) {
-          int status;
-          wait(&status);
-        }
+        continue;
       } else {
+        if (i > 0) {
+          close(0);
+          if (dup(pipes[i - 1][0]) == -1) {
+            fprintf(stderr, "Error dup pipe to stdin: %s\n", strerror(errno));
+            return errno;
+          }
+        }
+        if (i < pipe_n) {
+          close(1);
+          if (dup(pipes[i][1]) == -1) {
+            fprintf(stderr, "Error dup pipe to stdout: %s\n", strerror(errno));
+            return errno;
+          }
+        }
+        int j;
+        for (j = 0; j < pipe_n; j++) {
+          close(pipes[j][0]);
+          close(pipes[j][1]);
+        }
         if (childs[i].redirect_stdin != NULL) {
           int infd = open(childs[i].redirect_stdin, O_RDONLY);
           if (infd == -1) {
@@ -211,6 +234,16 @@ main(const int margc, const char *margv[], const char *menvp[])
         execvp(childs[i].argv[0], childs[i].argv);
         fprintf(stderr, "Error execvp: %s\n", strerror(errno));
         return errno;
+      }
+    }
+    for (i = 0; i < pipe_n; i++) {
+      close(pipes[i][0]);
+      close(pipes[i][1]);
+    }
+    if (background == 0) {
+      int status;
+      for (i = 0; i <= pipe_n; i++) {
+        wait(&status);
       }
     }
   }
