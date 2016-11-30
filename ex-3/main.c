@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -10,7 +11,7 @@
 #include <unistd.h>
 
 void getargs(const char*, int, char*, int*, char**);
-const char *getenv(const char *[], const char *);
+int execmanual(const char *filename, char *const argv[], char *envp[]);
 void new_prompt();
 
 #define MAX_LINE 256
@@ -25,25 +26,34 @@ struct child_proc {
 int reset_flag = 0;
 
 void
+new_prompt()
+{
+  printf("$ ");
+  fflush(stdout);
+}
+
+void
 sigint_handler(int signum)
 {
-  if (signum == SIGINT) {
-    reset_flag = 1;
+  reset_flag = 2;
+}
+
+void
+sigchld_handler(int signum)
+{
+  reset_flag = 1;
+  if (signum == SIGCHLD) {
+    int status;
+    wait(&status);
   }
 }
 
 int
-main(const int margc, const char *margv[], const char *menvp[])
+main(const int margc, const char *margv[], char *menvp[])
 {
   char line[MAX_LINE];
   char argbuf[MAX_LINE * 2];
   struct child_proc childs[MAX_PIPE];
-  sigset_t block, oblock;
-  sigaddset(&block, 0);
-  if (sigprocmask(SIG_BLOCK, &block, &oblock) == -1) {
-    fprintf(stderr, "Error sigprocmask: %s\n", strerror(errno));
-    return errno;
-  }
   struct sigaction act;
   act.sa_handler = sigint_handler;
   sigemptyset(&act.sa_mask);
@@ -52,15 +62,27 @@ main(const int margc, const char *margv[], const char *menvp[])
     fprintf(stderr, "Error sigaction: %s\n", strerror(errno));
     return errno;
   }
+  act.sa_handler = sigchld_handler;
+  if (sigaction(SIGCHLD, &act, NULL) == -1) {
+    fprintf(stderr, "Error sigaction: %s\n", strerror(errno));
+    return errno;
+  }
   while (1) {
-    if (reset_flag) {
+    if (reset_flag == 2) {
       reset_flag = 0;
       putchar('\n');
+    }
+    if (reset_flag) {
+      reset_flag = 0;
     }
     new_prompt();
     if (fgets(line, MAX_LINE, stdin) == NULL) {
       if (reset_flag) {
         continue;
+      }
+      if (feof(stdin)) {
+        printf("exit\n");
+        return 0;
       }
       fprintf(stderr, "Input error when fgets. %d\n", ferror(stdin));
       return 1;
@@ -81,8 +103,7 @@ main(const int margc, const char *margv[], const char *menvp[])
           fprintf(stderr, "Error chdir: %s\n", strerror(errno));
         }
       } else {
-        const char *home = getenv(menvp, "HOME");
-        printf("%s\n", home);
+        const char *home = getenv("HOME");
         if (chdir(home) != 0) {
           fprintf(stderr, "Error chdir: %s\n", strerror(errno));
         }
@@ -258,11 +279,7 @@ main(const int margc, const char *margv[], const char *menvp[])
             return errno;
           }
         }
-        if (sigprocmask(SIG_SETMASK, &oblock, NULL) == -1) {
-          fprintf(stderr, "Error sigprocmask: %s\n", strerror(errno));
-          return errno;
-        }
-        execvp(childs[i].argv[0], childs[i].argv);
+        execmanual(childs[i].argv[0], childs[i].argv, menvp);
         fprintf(stderr, "Error execvp: %s\n", strerror(errno));
         return errno;
       }
