@@ -11,6 +11,7 @@
 
 void getargs(const char*, int, char*, int*, char**);
 const char *getenv(const char *[], const char *);
+void new_prompt();
 
 #define MAX_LINE 256
 #define MAX_PIPE 100
@@ -21,6 +22,16 @@ struct child_proc {
   char **argv;
 };
 
+int reset_flag = 0;
+
+void
+sigint_handler(int signum)
+{
+  if (signum == SIGINT) {
+    reset_flag = 1;
+  }
+}
+
 int
 main(const int margc, const char *margv[], const char *menvp[])
 {
@@ -28,16 +39,30 @@ main(const int margc, const char *margv[], const char *menvp[])
   char argbuf[MAX_LINE * 2];
   struct child_proc childs[MAX_PIPE];
   sigset_t block, oblock;
-  sigaddset(&block, SIGINT);
+  sigaddset(&block, 0);
   if (sigprocmask(SIG_BLOCK, &block, &oblock) == -1) {
     fprintf(stderr, "Error sigprocmask: %s\n", strerror(errno));
     return errno;
   }
+  struct sigaction act;
+  act.sa_handler = sigint_handler;
+  sigemptyset(&act.sa_mask);
+  act.sa_flags |= SA_RESTART;
+  if (sigaction(SIGINT, &act, NULL) == -1) {
+    fprintf(stderr, "Error sigaction: %s\n", strerror(errno));
+    return errno;
+  }
   while (1) {
-    printf("$ ");
-    fflush(stdout);
+    if (reset_flag) {
+      reset_flag = 0;
+      putchar('\n');
+    }
+    new_prompt();
     if (fgets(line, MAX_LINE, stdin) == NULL) {
-      fprintf(stderr, "Input error when fgets.\n");
+      if (reset_flag) {
+        continue;
+      }
+      fprintf(stderr, "Input error when fgets. %d\n", ferror(stdin));
       return 1;
     }
     if (line[strlen(line) - 1] != '\n') {
@@ -178,10 +203,6 @@ main(const int margc, const char *margv[], const char *menvp[])
       }
       argv[argc - d] = NULL;
     }
-    for (i = 0; i < argc; i++) {
-      printf("'%s',", argv[i]);
-    }
-    putchar('\n');
     int pipes[MAX_PIPE][2];
     for (i = 0; i < pipe_n; i++) {
       if (pipe(pipes[i]) == -1) {
