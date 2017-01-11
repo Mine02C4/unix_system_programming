@@ -38,7 +38,7 @@ init_addr_pool(const char *filename)
     if (fscanf(fp, "%s %s", addr_str, mask_str) == EOF) {
       break;
     }
-    if (!(inet_aton(addr_str, &addr) && inet_aton(mask_str, &mask))) {
+    if (inet_aton(addr_str, &addr) == 0 || inet_aton(mask_str, &mask) == 0) {
       fprintf(stderr, "Error: config-file invalid format.\n");
       exit(1);
     }
@@ -47,6 +47,8 @@ init_addr_pool(const char *filename)
       fprintf(stderr, "Error: Memory allocation error!!!!\n");
       exit(1);
     }
+    da->addr = addr;
+    da->netmask = mask;
     insert_addr_pool(da);
   }
 }
@@ -58,6 +60,7 @@ get_addr()
     return NULL;
   }
   struct dhcp_addr *da = addr_pool.fp;
+  printf("da addr %s\n", inet_ntoa(da->addr));
   da->fp->bp = da->bp;
   da->bp->fp = da->fp;
   return da;

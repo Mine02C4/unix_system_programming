@@ -14,9 +14,21 @@ struct dhcp_msg {
 };
 
 #include <stdio.h>
+#include <arpa/inet.h>
 
 void
-print_hex(const char *data, int length)
+print_msg(const struct dhcp_msg *msg)
+{
+  struct in_addr addr, mask;
+  addr.s_addr = msg->addr;
+  mask.s_addr = msg->mask;
+  printf("type = %d, code = %d, ttl = %d, addr = %s",
+      msg->type, msg->code, ntohs(msg->ttl), inet_ntoa(addr));
+  printf(", mask = %s\n", inet_ntoa(mask));
+}
+
+void
+print_hex(const unsigned char *data, int length)
 {
   int i;
   const int width = 4;

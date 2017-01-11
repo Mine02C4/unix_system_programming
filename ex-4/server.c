@@ -66,6 +66,7 @@ add_client(struct sockaddr_in *skt) {
     fprintf(stderr, "Error: Memory allocation error!!!!\n");
     exit(1);
   }
+  cp->id = skt->sin_addr;
   cp->fp = &client_list;
   cp->bp = client_list.bp;
   cp->fp->bp = cp;
@@ -84,6 +85,7 @@ delete_client(struct client *cp)
 void
 assign_addr(struct client *cp, struct dhcp_addr *da)
 {
+  printf("assign_addr\n");
   cp->da = da;
   cp->addr = da->addr;
   cp->netmask = da->netmask;
@@ -135,6 +137,8 @@ main(const int argc, const char *argv[])
     for (pt = ptab; pt->status; pt++) {
       if (pt->status == nowcl->status && pt->event == event) {
         (*pt->func)();
+        printf("Client id: %s State: %d -> %d\n",
+            inet_ntoa(nowcl->id), nowcl->status, pt->next_status);
         nowcl->status = pt->next_status;
         break;
       }
@@ -159,12 +163,13 @@ wait_event()
     exit(1);
   }
   printf("Recieve packet.\n");
-  print_hex((char *)&msg, count);
+  print_hex((unsigned char *)&msg, count);
   if (count != 12) {
     fprintf(stderr, "Invalid message size.\n");
     return Event_InvalidPacket;
   }
   nowcl = search_client(&skt);
+  printf("searched client: %p\n", nowcl);
   switch (msg.type) {
     case 1:
       printf("DISCOVER\n");
@@ -173,7 +178,7 @@ wait_event()
           nowcl = add_client(&skt);
           nowcl->status = Status_WaitDiscover;
         }
-        printf("Recieve DISCOVER.\n");
+        printf("Recieve DISCOVER. client = %p\n", nowcl);
         struct dhcp_addr *da = get_addr();
         if (da == NULL) {
           printf("DISCOVER NG.\n");
@@ -230,24 +235,25 @@ wait_event()
 void
 send_offer_ok()
 {
-  printf("send_offer_ok\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 2;
   msg.code = 0;
   msg.ttl = nowcl->ttl;
   msg.addr = nowcl->addr.s_addr;
-  msg.mask = nowcl->addr.s_addr;
+  msg.mask = nowcl->netmask.s_addr;
   if ((count = sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, sizeof(skt))) < 0) {
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("send OFFER OK: ");
+  print_msg(&msg);
+  print_hex((unsigned char *)&msg, count);
 }
 
 void
 send_offer_ng()
 {
-  printf("send_offer_ng\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 2;
@@ -259,13 +265,15 @@ send_offer_ng()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("send OFFER NG: ");
+  print_msg(&msg);
+  print_hex((unsigned char *)&msg, count);
   release_client();
 }
 
 void
 send_ack_ok()
 {
-  printf("send_ack_ok\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 4;
@@ -277,12 +285,14 @@ send_ack_ok()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("send ACK OK: ");
+  print_msg(&msg);
+  print_hex((unsigned char *)&msg, count);
 }
 
 void
 send_ack_ng()
 {
-  printf("send_ack_ng\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 4;
@@ -294,6 +304,9 @@ send_ack_ng()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("send ACK NG: ");
+  print_msg(&msg);
+  print_hex((unsigned char *)&msg, count);
   release_client();
 }
 

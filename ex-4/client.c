@@ -63,9 +63,11 @@ main(const int argc, const char *argv[])
   enum eEvent event;
   for (;;) {
     event = wait_event();
+    printf("Event: %d\n", event);
     for (pt = ptab; pt->status; pt++) {
       if (pt->status == status && pt->event == event) {
-        (*pt->func)();
+        if (pt->func != NULL)
+          (*pt->func)();
         status = pt->next_status;
         break;
       }
@@ -90,7 +92,7 @@ wait_event()
     exit(1);
   }
   printf("Recieve packet.\n");
-  print_hex((char *)&msg, count);
+  print_hex((unsigned char *)&msg, count);
   if (count != 12) {
     fprintf(stderr, "Invalid message size.\n");
     return Event_InvalidPacket;
@@ -99,11 +101,21 @@ wait_event()
     case 2:
       printf("Recieve OFFER\n");
       if (msg.code == 0) {
+        dhcp_ttl = msg.ttl;
+        dhcp_addr.s_addr = msg.addr;
+        dhcp_mask.s_addr = msg.mask;
         return Event_ReceiveOfferOK;
       } else if (msg.code == 1){
         return Event_ReceiveOfferNG;
       } else {
         return Event_InvalidPacket;
+      }
+    case 4:
+      printf("Recieve ACK\n");
+      if (msg.code == 0) {
+        return Event_ReceiveAckOK;
+      } else {
+        return Event_ReceiveAckNG;
       }
     default:
       return Event_InvalidPacket;
