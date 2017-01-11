@@ -11,10 +11,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define MYDHCP_PORT_NUMBER 51230
-
 struct proctable ptab[] = {
-  {Status_WaitDiscover, Event_ReceiveDiscover, send_offer}
+  { Status_WaitDiscover, Event_ReceiveDiscover, send_offer },
+  { 0, 0, NULL }
 };
 
 struct client {
@@ -199,6 +198,8 @@ wait_event()
     fprintf(stderr, "Error: in recvfrom");
     exit(1);
   }
+  printf("Recieve packet.\n");
+  print_hex(rbuf, count);
   struct dhcp_msg msg;
   if (parse_message(rbuf, count, &msg) < 0) {
     return Event_InvalidPacket;

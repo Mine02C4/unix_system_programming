@@ -2,14 +2,14 @@
 #define MYDHCP_SERVER_H_
 
 enum eStatus {
-  Status_WaitDiscover,
+  Status_WaitDiscover = 1,
   Status_WaitRequest,
   Status_ResentWaitRequest,
   Status_InUse,
 };
 
 enum eEvent {
-  Event_ReceiveDiscover,
+  Event_ReceiveDiscover = 1,
   Event_ReceiveRequestAllocOK,
   Event_ReceiveRequestAllocNG,
   Event_ReceiveRequestExtOK,
