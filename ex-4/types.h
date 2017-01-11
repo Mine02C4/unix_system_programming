@@ -21,7 +21,7 @@ print_hex(const char *data, int length)
   int i;
   const int width = 4;
   for (i = 0; i < length; i++) {
-    printf("%2x", data[i]);
+    printf("%02x ", data[i]);
     if (i % width == width - 1)
       putchar('\n');
   }

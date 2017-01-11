@@ -12,8 +12,16 @@
 #include <arpa/inet.h>
 
 struct proctable ptab[] = {
-  { Status_WaitDiscover, Event_ReceiveDiscover, send_offer },
-  { 0, 0, NULL }
+  { Status_WaitDiscover,  Event_ReceiveDiscover,        send_offer_ok,  Status_WaitRequest },
+  { Status_WaitDiscover,  Event_ReceiveDiscoverNG,      send_offer_ng,  0 },
+  { Status_WaitRequest,   Event_ReceiveRequestAllocNG,  send_ack_ng,    0 },
+  { Status_WaitRequest,   Event_ReceiveRequestAllocOK,  send_ack_ok,    Status_InUse },
+  { Status_WaitRequest,   Event_ReceiveTimeout,         send_offer_ok,  Status_ResentWaitRequest },
+  { Status_ResentWaitRequest, Event_ReceiveRequestAllocNG, send_ack_ng, 0 },
+  { Status_ResentWaitRequest, Event_ReceiveRequestAllocOK, send_ack_ok, Status_InUse },
+  { Status_InUse,         Event_ReceiveRequestExtOK,    ttl_reset,      Status_InUse },
+  { Status_InUse,         Event_ReceiveRequestExtNG,    send_ack_ng,    0 },
+  { 0, 0, NULL, 0 }
 };
 
 struct client {
@@ -50,6 +58,7 @@ search_client(struct sockaddr_in *skt)
 
 struct client *
 add_client(struct sockaddr_in *skt) {
+  printf("add_client\n");
   struct client *cp;
   if ((cp = (struct client *)malloc(sizeof(struct client))) == NULL) {
     fprintf(stderr, "Error: Memory allocation error!!!!\n");
@@ -126,6 +135,7 @@ init_addr_pool(const char *filename)
 int s;
 struct sockaddr_in myskt;
 struct client *nowcl;
+struct sockaddr_in skt;
 
 int
 main(const int argc, const char *argv[])
@@ -157,21 +167,23 @@ main(const int argc, const char *argv[])
 
   struct proctable *pt;
   enum eEvent event;
-  enum eStatus status = Status_WaitDiscover;
   nowcl = NULL;
   for (;;) {
     event = wait_event();
+    if (nowcl == NULL) {
+      continue;
+    }
     for (pt = ptab; pt->status; pt++) {
-      if (pt->status == status && pt->event == event) {
+      if (pt->status == nowcl->status && pt->event == event) {
         (*pt->func)();
-        nowcl = NULL;
+        nowcl->status = pt->next_status;
         break;
       }
     }
     if (pt->status == 0) {
       release_client();
-      break;
     }
+    nowcl = NULL;
   }
   return 0;
 }
@@ -191,26 +203,27 @@ enum eEvent
 wait_event()
 {
   int count;
-  struct sockaddr_in skt;
-  char rbuf[512];
   socklen_t sktlen = sizeof(skt);
-  if ((count = recvfrom(s, rbuf, sizeof(rbuf), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
+  struct dhcp_msg msg;
+  if ((count = recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
     fprintf(stderr, "Error: in recvfrom");
     exit(1);
   }
   printf("Recieve packet.\n");
-  print_hex(rbuf, count);
-  struct dhcp_msg msg;
-  if (parse_message(rbuf, count, &msg) < 0) {
+  print_hex((char *)&msg, count);
+  if (count != 12) {
+    fprintf(stderr, "Invalid message size.\n");
     return Event_InvalidPacket;
   }
   nowcl = search_client(&skt);
   switch (msg.type) {
     case 1:
+      printf("DISCOVER\n");
       if (msg.code == 0 && msg.ttl == 0 && msg.addr == 0 && msg.mask == 0) {
         if (nowcl == NULL) {
           nowcl = add_client(&skt);
         }
+        printf("Recieve DISCOVER.\n");
         return Event_ReceiveDiscover;
       } else {
         return Event_InvalidPacket;
@@ -254,9 +267,76 @@ wait_event()
 
 
 void
-send_offer()
+send_offer_ok()
 {
-  // TODO: implement
+  int count;
+  struct dhcp_msg msg;
+  msg.type = 2;
+  msg.code = 0;
+  msg.ttl = nowcl->ttl;
+  msg.addr = nowcl->addr.s_addr;
+  msg.mask = nowcl->addr.s_addr;
+  if ((count = sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, sizeof(skt))) < 0) {
+    fprintf(stderr, "Error: in sendto");
+    exit(1);
+  }
+}
+
+void
+send_offer_ng()
+{
+  int count;
+  struct dhcp_msg msg;
+  msg.type = 2;
+  msg.code = 1;
+  msg.ttl = 0;
+  msg.addr = 0;
+  msg.mask = 0;
+  if ((count = sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, sizeof(skt))) < 0) {
+    fprintf(stderr, "Error: in sendto");
+    exit(1);
+  }
+  release_client();
+}
+
+void
+send_ack_ok()
+{
+  int count;
+  struct dhcp_msg msg;
+  msg.type = 4;
+  msg.code = 0;
+  msg.ttl = nowcl->ttl;
+  msg.addr = nowcl->addr.s_addr;
+  msg.mask = nowcl->netmask.s_addr;
+  if ((count = sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, sizeof(skt))) < 0) {
+    fprintf(stderr, "Error: in sendto");
+    exit(1);
+  }
+}
+
+void
+send_ack_ng()
+{
+  int count;
+  struct dhcp_msg msg;
+  msg.type = 4;
+  msg.code = 4;
+  msg.ttl = 0;
+  msg.addr = 0;
+  msg.mask = 0;
+  if ((count = sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, sizeof(skt))) < 0) {
+    fprintf(stderr, "Error: in sendto");
+    exit(1);
+  }
+  release_client();
+}
+
+void
+ttl_reset()
+{
+  // TODO: reset...?
+  send_ack_ok();
 }
 
 void

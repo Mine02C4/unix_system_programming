@@ -10,6 +10,7 @@ enum eStatus {
 
 enum eEvent {
   Event_ReceiveDiscover = 1,
+  Event_ReceiveDiscoverNG,
   Event_ReceiveRequestAllocOK,
   Event_ReceiveRequestAllocNG,
   Event_ReceiveRequestExtOK,
@@ -26,10 +27,15 @@ struct proctable {
   enum eStatus status;
   enum eEvent event;
   procfuncptr func;
+  enum eStatus next_status;
 };
 
 /* procfunc */
-void send_offer();
+void send_offer_ok();
+void send_offer_ng();
+void send_ack_ng();
+void send_ack_ok();
+void ttl_reset();
 void release_client();
 
 enum eEvent wait_event();

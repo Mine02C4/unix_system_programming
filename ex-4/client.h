@@ -28,10 +28,14 @@ struct proctable {
   enum eStatus status;
   enum eEvent event;
   procfuncptr func;
+  enum eStatus next_status;
 };
 
 /* procfunc */
 void send_discover();
+void send_request_alloc();
+void send_request_ext();
+void send_release();
 
 enum eEvent wait_event();
 
