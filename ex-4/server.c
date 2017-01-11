@@ -1,4 +1,5 @@
 #include "server.h"
+#include "pool.h"
 #include "types.h"
 
 #include <stdio.h>
@@ -28,6 +29,7 @@ struct client {
   struct client *fp;
   struct client *bp;
   enum eStatus status;
+  struct dhcp_addr *da;
   int ttlcounter;
   struct in_addr id;
   struct in_addr addr;
@@ -79,57 +81,12 @@ delete_client(struct client *cp)
   free(cp);
 }
 
-struct dhcp_addr {
-  struct dhcp_addr *fp;
-  struct dhcp_addr *bp;
-  struct in_addr addr;
-  struct in_addr netmask;
-};
-
-struct dhcp_addr addr_pool;
-int dhcp_ttl;
-
 void
-insert_addr_pool(struct dhcp_addr *da)
+assign_addr(struct client *cp, struct dhcp_addr *da)
 {
-  da->fp = &addr_pool;
-  da->bp = addr_pool.bp;
-  da->fp->bp = da;
-  da->bp->fp = da;
-}
-
-void
-init_addr_pool(const char *filename)
-{
-  FILE* fp;
-  if((fp = fopen(filename, "r")) == NULL) {
-    fprintf(stderr, "Error: config-file open error\n");
-    exit(1);
-  }
-  if (fscanf(fp, "%d", &dhcp_ttl) != 1) {
-    fprintf(stderr, "Error: config-file error in line 1\n");
-    exit(1);
-  }
-  addr_pool.fp = &addr_pool;
-  addr_pool.bp = &addr_pool;
-  for (;;) {
-    struct in_addr addr;
-    struct in_addr mask;
-    char addr_str[512], mask_str[512];
-    if (fscanf(fp, "%s %s", addr_str, mask_str) == EOF) {
-      break;
-    }
-    if (!(inet_aton(addr_str, &addr) && inet_aton(mask_str, &mask))) {
-      fprintf(stderr, "Error: config-file invalid format.\n");
-      exit(1);
-    }
-    struct dhcp_addr *da;
-    if ((da = (struct dhcp_addr *)malloc(sizeof(struct dhcp_addr))) == NULL) {
-      fprintf(stderr, "Error: Memory allocation error!!!!\n");
-      exit(1);
-    }
-    insert_addr_pool(da);
-  }
+  cp->da = da;
+  cp->addr = da->addr;
+  cp->netmask = da->netmask;
 }
 
 int s;
@@ -170,7 +127,9 @@ main(const int argc, const char *argv[])
   nowcl = NULL;
   for (;;) {
     event = wait_event();
+    printf("Event: %d\n", event);
     if (nowcl == NULL) {
+      printf("continue\n");
       continue;
     }
     for (pt = ptab; pt->status; pt++) {
@@ -181,21 +140,11 @@ main(const int argc, const char *argv[])
       }
     }
     if (pt->status == 0) {
+      printf("FSM error\n");
       release_client();
     }
     nowcl = NULL;
   }
-  return 0;
-}
-
-int
-parse_message(char msg[], int length, struct dhcp_msg *dmsg)
-{
-  if (length != 12) {
-    fprintf(stderr, "Invalid message size.\n");
-    return -1;
-  }
-  memcpy(msg, dmsg, length);
   return 0;
 }
 
@@ -222,13 +171,24 @@ wait_event()
       if (msg.code == 0 && msg.ttl == 0 && msg.addr == 0 && msg.mask == 0) {
         if (nowcl == NULL) {
           nowcl = add_client(&skt);
+          nowcl->status = Status_WaitDiscover;
         }
         printf("Recieve DISCOVER.\n");
+        struct dhcp_addr *da = get_addr();
+        if (da == NULL) {
+          printf("DISCOVER NG.\n");
+          return Event_ReceiveDiscoverNG;
+        }
+        assign_addr(nowcl, da);
+        nowcl->ttl = htons(dhcp_ttl);
+        nowcl->ttlcounter = htons(dhcp_ttl);
+        printf("DISCOVER OK.\n");
         return Event_ReceiveDiscover;
       } else {
         return Event_InvalidPacket;
       }
     case 3:
+      printf("REQUEST\n");
       if (nowcl == NULL)
         return Event_InvalidPacket;
       switch (msg.code) {
@@ -251,6 +211,7 @@ wait_event()
       }
       break;
     case 5:
+      printf("RELEASE\n");
       if (nowcl == NULL)
         return Event_InvalidPacket;
       if (msg.code == 0 && msg.ttl == 0 && msg.mask == 0 && nowcl->addr.s_addr == msg.addr) {
@@ -269,6 +230,7 @@ wait_event()
 void
 send_offer_ok()
 {
+  printf("send_offer_ok\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 2;
@@ -285,6 +247,7 @@ send_offer_ok()
 void
 send_offer_ng()
 {
+  printf("send_offer_ng\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 2;
@@ -302,6 +265,7 @@ send_offer_ng()
 void
 send_ack_ok()
 {
+  printf("send_ack_ok\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 4;
@@ -318,6 +282,7 @@ send_ack_ok()
 void
 send_ack_ng()
 {
+  printf("send_ack_ng\n");
   int count;
   struct dhcp_msg msg;
   msg.type = 4;
@@ -343,7 +308,10 @@ void
 release_client()
 {
   if (nowcl != NULL) {
-    // TODO: implement
+    printf("release_client\n");
+    insert_addr_pool(nowcl->da);
+    delete_client(nowcl);
+    nowcl = NULL;
   }
 }
 

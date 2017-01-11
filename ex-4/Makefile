@@ -14,7 +14,7 @@ all: $(CLIENT) $(SERVER)
 $(CLIENT): client.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(SERVER): server.o
+$(SERVER): server.o pool.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 %.o: %.c
