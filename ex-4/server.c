@@ -1,3 +1,6 @@
+#include "server.h"
+#include "types.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,37 +12,6 @@
 #include <arpa/inet.h>
 
 #define MYDHCP_PORT_NUMBER 51230
-
-enum eStatus {
-  Status_WaitDiscover,
-  Status_WaitRequest,
-  Status_ResentWaitRequest,
-  Status_InUse,
-};
-
-enum eEvent {
-  Event_ReceiveDiscover,
-  Event_ReceiveRequestAllocOK,
-  Event_ReceiveRequestAllocNG,
-  Event_ReceiveRequestExtOK,
-  Event_ReceiveRequestExtNG,
-  Event_ReceiveRelease,
-  Event_ReceiveTimeout,
-  Event_TTLTimeout,
-  Event_InvalidPacket,
-};
-
-typedef void (* procfuncptr)(void);
-
-void send_offer();
-
-enum eEvent wait_event();
-
-struct proctable {
-  enum eStatus status;
-  enum eEvent event;
-  procfuncptr func;
-};
 
 struct proctable ptab[] = {
   {Status_WaitDiscover, Event_ReceiveDiscover, send_offer}
@@ -63,6 +35,40 @@ init_client_list()
 {
   client_list.fp = &client_list;
   client_list.bp = &client_list;
+}
+
+struct client *
+search_client(struct sockaddr_in *skt)
+{
+  struct client *cp;
+  for (cp = client_list.fp; cp != &client_list; cp = cp->fp) {
+    if (cp->id.s_addr == skt->sin_addr.s_addr) {
+      return cp;
+    }
+  }
+  return NULL;
+}
+
+struct client *
+add_client(struct sockaddr_in *skt) {
+  struct client *cp;
+  if ((cp = (struct client *)malloc(sizeof(struct client))) == NULL) {
+    fprintf(stderr, "Error: Memory allocation error!!!!\n");
+    exit(1);
+  }
+  cp->fp = &client_list;
+  cp->bp = client_list.bp;
+  cp->fp->bp = cp;
+  cp->bp->fp = cp;
+  return cp;
+}
+
+void
+delete_client(struct client *cp)
+{
+  cp->fp->bp = cp->bp;
+  cp->bp->fp = cp->fp;
+  free(cp);
 }
 
 struct dhcp_addr {
@@ -120,6 +126,7 @@ init_addr_pool(const char *filename)
 
 int s;
 struct sockaddr_in myskt;
+struct client *nowcl;
 
 int
 main(const int argc, const char *argv[])
@@ -130,6 +137,8 @@ main(const int argc, const char *argv[])
     exit(1);
   }
   init_addr_pool(argv[1]);
+
+  init_client_list();
 
   in_port_t myport = MYDHCP_PORT_NUMBER;
   if ((s = socket(PF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -150,29 +159,23 @@ main(const int argc, const char *argv[])
   struct proctable *pt;
   enum eEvent event;
   enum eStatus status = Status_WaitDiscover;
+  nowcl = NULL;
   for (;;) {
     event = wait_event();
     for (pt = ptab; pt->status; pt++) {
       if (pt->status == status && pt->event == event) {
         (*pt->func)();
+        nowcl = NULL;
         break;
       }
     }
     if (pt->status == 0) {
-      // TODO: close session
+      release_client();
       break;
     }
   }
   return 0;
 }
-
-struct dhcp_msg {
-  uint8_t type;
-  uint8_t code;
-  uint16_t ttl;
-  in_addr_t addr;
-  in_addr_t mask;
-};
 
 int
 parse_message(char msg[], int length, struct dhcp_msg *dmsg)
@@ -200,23 +203,31 @@ wait_event()
   if (parse_message(rbuf, count, &msg) < 0) {
     return Event_InvalidPacket;
   }
+  nowcl = search_client(&skt);
   switch (msg.type) {
     case 1:
       if (msg.code == 0 && msg.ttl == 0 && msg.addr == 0 && msg.mask == 0) {
+        if (nowcl == NULL) {
+          nowcl = add_client(&skt);
+        }
         return Event_ReceiveDiscover;
       } else {
         return Event_InvalidPacket;
       }
     case 3:
+      if (nowcl == NULL)
+        return Event_InvalidPacket;
       switch (msg.code) {
         case 2:
-          if (ntohs(msg.ttl) <= dhcp_ttl) { // TODO: IP check
+          if (ntohs(msg.ttl) <= dhcp_ttl &&
+              nowcl->addr.s_addr == msg.addr && nowcl->netmask.s_addr == msg.mask) {
             return Event_ReceiveRequestAllocOK;
           } else {
             return Event_ReceiveRequestAllocNG;
           }
         case 3:
-          if (ntohs(msg.ttl) <= dhcp_ttl) { // TODO: IP check
+          if (ntohs(msg.ttl) <= dhcp_ttl &&
+              nowcl->addr.s_addr == msg.addr && nowcl->netmask.s_addr == msg.mask) {
             return Event_ReceiveRequestExtOK;
           } else {
             return Event_ReceiveRequestExtNG;
@@ -226,23 +237,32 @@ wait_event()
       }
       break;
     case 5:
-        if (msg.code == 0 && msg.ttl == 0 && msg.mask == 0) {
-          // TODO: IP check
-          return Event_ReceiveRelease;
-        } else {
-          return Event_InvalidPacket;
-        }
+      if (nowcl == NULL)
+        return Event_InvalidPacket;
+      if (msg.code == 0 && msg.ttl == 0 && msg.mask == 0 && nowcl->addr.s_addr == msg.addr) {
+        return Event_ReceiveRelease;
+      } else {
+        return Event_InvalidPacket;
+      }
       break;
     default:
       return Event_InvalidPacket;
   }
-  return -1;
+  return Event_InvalidPacket;
 }
 
 
 void
 send_offer()
 {
+  // TODO: implement
+}
 
+void
+release_client()
+{
+  if (nowcl != NULL) {
+    // TODO: implement
+  }
 }
 
