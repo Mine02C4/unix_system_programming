@@ -14,6 +14,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#define RECV_TIMEOUT 10
+
 struct proctable ptab[] = {
   { Status_WaitDiscover,  Event_ReceiveDiscover,        send_offer_ok,  Status_WaitRequest },
   { Status_WaitDiscover,  Event_ReceiveDiscoverNG,      send_offer_ng,  0 },
@@ -32,6 +34,7 @@ struct client {
   struct client *bp;
   enum eStatus status;
   struct dhcp_addr *da;
+  int recvcounter;
   int ttlcounter;
   struct in_addr id;
   struct in_addr addr;
@@ -93,7 +96,6 @@ assign_addr(struct client *cp, struct dhcp_addr *da)
   cp->netmask = da->netmask;
 }
 
-//int timeoutflag = 0;
 void
 countdown_ttl(int val)
 {
@@ -114,10 +116,30 @@ countdown_ttl(int val)
   }
 }
 
+
 int s;
 struct sockaddr_in myskt;
 struct client *nowcl;
 struct sockaddr_in skt;
+
+int
+countdown_recv(int val)
+{
+  struct client *cp;
+  for (cp = client_list.fp; cp != &client_list; cp = cp->fp) {
+    if (cp->status == Status_WaitRequest || cp->status == Status_ResentWaitRequest) {
+      cp->recvcounter -= val;
+      printf("Timeout decreament: client id = %s, counter = %d\n",
+          inet_ntoa(cp->id), cp->recvcounter);
+      if (cp->recvcounter <= 0) {
+        printf("Recieve timeout: client id = %s\n", inet_ntoa(cp->id));
+        nowcl = cp;
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
 
 int alrmflag = 0;
 void
@@ -207,8 +229,12 @@ wait_event()
     if ((count = recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
       if (errno == EINTR) {
         if (alrmflag > 0) {
-          countdown_ttl(alrmflag);
+          int dval = alrmflag;
           alrmflag = 0;
+          countdown_ttl(dval);
+          if (countdown_recv(dval)) {
+            return Event_ReceiveTimeout;
+          }
         }
       } else {
         fprintf(stderr, "Error: in recvfrom\n");
@@ -256,6 +282,8 @@ wait_event()
         case 2:
           if (ntohs(msg.ttl) <= dhcp_ttl &&
               nowcl->addr.s_addr == msg.addr && nowcl->netmask.s_addr == msg.mask) {
+            nowcl->ttlcounter = ntohs(msg.ttl);
+            nowcl->ttl = msg.ttl;
             return Event_ReceiveRequestAllocOK;
           } else {
             return Event_ReceiveRequestAllocNG;
@@ -263,6 +291,8 @@ wait_event()
         case 3:
           if (ntohs(msg.ttl) <= dhcp_ttl &&
               nowcl->addr.s_addr == msg.addr && nowcl->netmask.s_addr == msg.mask) {
+            nowcl->ttlcounter = ntohs(msg.ttl);
+            nowcl->ttl = msg.ttl;
             return Event_ReceiveRequestExtOK;
           } else {
             return Event_ReceiveRequestExtNG;
@@ -302,6 +332,7 @@ send_offer_ok()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  nowcl->recvcounter = RECV_TIMEOUT;
   printf("send OFFER OK: ");
   print_msg(&msg);
   print_hex((unsigned char *)&msg, count);
