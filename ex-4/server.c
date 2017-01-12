@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include <errno.h>
+#include <signal.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -91,10 +93,38 @@ assign_addr(struct client *cp, struct dhcp_addr *da)
   cp->netmask = da->netmask;
 }
 
+//int timeoutflag = 0;
+void
+countdown_ttl(int val)
+{
+  struct client *cp;
+  for (cp = client_list.fp; cp != &client_list; cp = cp->fp) {
+    if (cp->status == Status_InUse) {
+      cp->ttlcounter -= val;
+      printf("TTL decreament: client id = %s, counter = %d\n",
+          inet_ntoa(cp->id), cp->ttlcounter);
+      if (cp->ttlcounter <= 0) {
+        printf("TTL Timeout: client id = %s\n", inet_ntoa(cp->id));
+        struct client *bcp = cp->bp;
+        insert_addr_pool(cp->da);
+        delete_client(cp);
+        cp = bcp;
+      }
+    }
+  }
+}
+
 int s;
 struct sockaddr_in myskt;
 struct client *nowcl;
 struct sockaddr_in skt;
+
+int alrmflag = 0;
+void
+sigalrm_handler(int signum)
+{
+  alrmflag++;
+}
 
 int
 main(const int argc, const char *argv[])
@@ -121,6 +151,21 @@ main(const int argc, const char *argv[])
     fprintf(stderr, "Error in binding: %s\n", strerror(errno));
     return errno;
   }
+
+  struct sigaction act;
+  act.sa_handler = sigalrm_handler;
+  sigemptyset(&act.sa_mask);
+  act.sa_flags |= SA_RESTART;
+  if (sigaction(SIGALRM, &act, NULL) == -1) {
+    fprintf(stderr, "Error sigaction: %s\n", strerror(errno));
+    return errno;
+  }
+  struct itimerval timer_val;
+  timer_val.it_interval.tv_sec = 1;
+  timer_val.it_interval.tv_usec = 0;
+  timer_val.it_value.tv_sec = 1;
+  timer_val.it_value.tv_usec = 0;
+  setitimer(ITIMER_REAL, &timer_val, NULL);
 
   printf("Start listening.\n");
 
@@ -158,9 +203,20 @@ wait_event()
   int count;
   socklen_t sktlen = sizeof(skt);
   struct dhcp_msg msg;
-  if ((count = recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
-    fprintf(stderr, "Error: in recvfrom");
-    exit(1);
+  for (;;) {
+    if ((count = recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
+      if (errno == EINTR) {
+        if (alrmflag > 0) {
+          countdown_ttl(alrmflag);
+          alrmflag = 0;
+        }
+      } else {
+        fprintf(stderr, "Error: in recvfrom\n");
+        exit(1);
+      }
+      continue;
+    }
+    break;
   }
   printf("Recieve packet.\n");
   print_hex((unsigned char *)&msg, count);
@@ -186,7 +242,7 @@ wait_event()
         }
         assign_addr(nowcl, da);
         nowcl->ttl = htons(dhcp_ttl);
-        nowcl->ttlcounter = htons(dhcp_ttl);
+        nowcl->ttlcounter = dhcp_ttl;
         printf("DISCOVER OK.\n");
         return Event_ReceiveDiscover;
       } else {

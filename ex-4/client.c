@@ -12,6 +12,8 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 
+#define RECV_TIMEOUT 10
+
 struct proctable ptab[] = {
   { Status_WaitOffer, Event_ReceiveOfferOK, send_request_alloc, Status_WaitAck },
   { Status_WaitOffer, Event_ReceiveTimeout, send_discover,      Status_ResentWaitAck },
@@ -33,14 +35,22 @@ struct sockaddr_in skt;
 enum eStatus status;
 int dhcp_ttl;
 int ttlcounter;
+int recvcounter;
 struct in_addr dhcp_addr;
 struct in_addr dhcp_mask;
-int alrmflag = 0;
 
+int alrmflag = 0;
 void
 sigalrm_handler(int signum)
 {
   alrmflag++;
+}
+
+int hupflag = 0;
+void
+sighup_handler(int signum)
+{
+  hupflag++;
 }
 
 int
@@ -67,6 +77,11 @@ main(const int argc, const char *argv[])
   sigemptyset(&act.sa_mask);
   act.sa_flags |= SA_RESTART;
   if (sigaction(SIGALRM, &act, NULL) == -1) {
+    fprintf(stderr, "Error sigaction: %s\n", strerror(errno));
+    return errno;
+  }
+  act.sa_handler = sighup_handler;
+  if (sigaction(SIGHUP, &act, NULL) == -1) {
     fprintf(stderr, "Error sigaction: %s\n", strerror(errno));
     return errno;
   }
@@ -99,7 +114,7 @@ main(const int argc, const char *argv[])
         break;
       }
     }
-    if (pt->status == 0) {
+    if (pt->status == 0 || status == 0) {
       printf("Finish\n");
       break;
     }
@@ -121,15 +136,25 @@ wait_event()
       if (ttlcounter < ntohs(dhcp_ttl) / 2) {
         return Event_HalfOfTTL;
       }
+      if (hupflag > 0) {
+        hupflag = 0;
+        return Event_SIGHUP;
+      }
     }
   } else {
     int count;
     struct sockaddr_in skt;
     socklen_t sktlen = sizeof(skt);
     struct dhcp_msg msg;
+    recvcounter = RECV_TIMEOUT;
     for (;;) {
       if ((count = recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
-        if (errno != EINTR) {
+        if (errno == EINTR) {
+          recvcounter--;
+          if (recvcounter <= 0) {
+            return Event_ReceiveTimeout;
+          }
+        } else {
           fprintf(stderr, "Error: in recvfrom\n");
           exit(1);
         }
@@ -186,6 +211,7 @@ send_discover()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("Send DISCOVER\n");
 }
 
 void
@@ -202,6 +228,7 @@ send_request_alloc()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("Send REQUEST(alloc)\n");
 }
 
 void
@@ -218,6 +245,7 @@ send_request_ext()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("Send REQUEST(ext)\n");
 }
 
 void
@@ -234,5 +262,6 @@ send_release()
     fprintf(stderr, "Error: in sendto");
     exit(1);
   }
+  printf("Send RELEASE\n");
 }
 
