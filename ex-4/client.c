@@ -5,9 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <signal.h>
+#include <unistd.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
 
 struct proctable ptab[] = {
   { Status_WaitOffer, Event_ReceiveOfferOK, send_request_alloc, Status_WaitAck },
@@ -29,8 +32,16 @@ int s;
 struct sockaddr_in skt;
 enum eStatus status;
 int dhcp_ttl;
+int ttlcounter;
 struct in_addr dhcp_addr;
 struct in_addr dhcp_mask;
+int alrmflag = 0;
+
+void
+sigalrm_handler(int signum)
+{
+  alrmflag++;
+}
 
 int
 main(const int argc, const char *argv[])
@@ -51,6 +62,21 @@ main(const int argc, const char *argv[])
     return errno;
   }
 
+  struct sigaction act;
+  act.sa_handler = sigalrm_handler;
+  sigemptyset(&act.sa_mask);
+  act.sa_flags |= SA_RESTART;
+  if (sigaction(SIGALRM, &act, NULL) == -1) {
+    fprintf(stderr, "Error sigaction: %s\n", strerror(errno));
+    return errno;
+  }
+  struct itimerval timer_val;
+  timer_val.it_interval.tv_sec = 1;
+  timer_val.it_interval.tv_usec = 0;
+  timer_val.it_value.tv_sec = 1;
+  timer_val.it_value.tv_usec = 0;
+  setitimer(ITIMER_REAL, &timer_val, NULL);
+
   in_port_t server_port = MYDHCP_PORT_NUMBER;
   skt.sin_family = AF_INET;
   skt.sin_port = htons(server_port);
@@ -68,6 +94,7 @@ main(const int argc, const char *argv[])
       if (pt->status == status && pt->event == event) {
         if (pt->func != NULL)
           (*pt->func)();
+        printf("State: %d -> %d\n", status, pt->next_status);
         status = pt->next_status;
         break;
       }
@@ -83,42 +110,65 @@ main(const int argc, const char *argv[])
 enum eEvent
 wait_event()
 {
-  int count;
-  struct sockaddr_in skt;
-  socklen_t sktlen = sizeof(skt);
-  struct dhcp_msg msg;
-  if ((count = recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
-    fprintf(stderr, "Error: in recvfrom");
-    exit(1);
-  }
-  printf("Recieve packet.\n");
-  print_hex((unsigned char *)&msg, count);
-  if (count != 12) {
-    fprintf(stderr, "Invalid message size.\n");
-    return Event_InvalidPacket;
-  }
-  switch (msg.type) {
-    case 2:
-      printf("Recieve OFFER\n");
-      if (msg.code == 0) {
-        dhcp_ttl = msg.ttl;
-        dhcp_addr.s_addr = msg.addr;
-        dhcp_mask.s_addr = msg.mask;
-        return Event_ReceiveOfferOK;
-      } else if (msg.code == 1){
-        return Event_ReceiveOfferNG;
-      } else {
-        return Event_InvalidPacket;
+  if (status == Status_InUse) {
+    for (;;) {
+      pause();
+      if (alrmflag > 0) {
+        alrmflag = 0;
+        ttlcounter--;
+        printf("TTL counter: %d\n", ttlcounter);
       }
-    case 4:
-      printf("Recieve ACK\n");
-      if (msg.code == 0) {
-        return Event_ReceiveAckOK;
-      } else {
-        return Event_ReceiveAckNG;
+      if (ttlcounter < ntohs(dhcp_ttl) / 2) {
+        return Event_HalfOfTTL;
       }
-    default:
+    }
+  } else {
+    int count;
+    struct sockaddr_in skt;
+    socklen_t sktlen = sizeof(skt);
+    struct dhcp_msg msg;
+    for (;;) {
+      if ((count = recvfrom(s, &msg, sizeof(msg), 0, (struct sockaddr *)&skt, &sktlen)) < 0) {
+        if (errno != EINTR) {
+          fprintf(stderr, "Error: in recvfrom\n");
+          exit(1);
+        }
+        continue;
+      }
+      break;
+    }
+    printf("Recieve packet.\n");
+    print_hex((unsigned char *)&msg, count);
+    if (count != 12) {
+      fprintf(stderr, "Invalid message size.\n");
       return Event_InvalidPacket;
+    }
+    switch (msg.type) {
+      case 2:
+        printf("Recieve OFFER\n");
+        if (msg.code == 0) {
+          dhcp_ttl = msg.ttl;
+          dhcp_addr.s_addr = msg.addr;
+          dhcp_mask.s_addr = msg.mask;
+          ttlcounter = ntohs(msg.ttl);
+          return Event_ReceiveOfferOK;
+        } else if (msg.code == 1){
+          return Event_ReceiveOfferNG;
+        } else {
+          return Event_InvalidPacket;
+        }
+      case 4:
+        printf("Recieve ACK\n");
+        if (msg.code == 0) {
+          dhcp_ttl = msg.ttl;
+          ttlcounter = ntohs(msg.ttl);
+          return Event_ReceiveAckOK;
+        } else {
+          return Event_ReceiveAckNG;
+        }
+      default:
+        return Event_InvalidPacket;
+    }
   }
 }
 
