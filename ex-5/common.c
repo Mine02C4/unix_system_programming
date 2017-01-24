@@ -27,7 +27,7 @@ myftph_data_init(struct myftph_data *pkt, uint8_t type, uint8_t code)
 void
 send_mypkt(int socket, struct myftph *pkt)
 {
-  if (send(socket, &pkt, sizeof(pkt), 0) < 0) {
+  if (send(socket, pkt, sizeof(*pkt), 0) < 0) {
     fprintf(stderr, "Error in send: %s\n", strerror(errno));
     exit(1);
   }
