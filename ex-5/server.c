@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 int s;
 
@@ -46,6 +47,51 @@ wait_connect(struct sockaddr_in *skt, int *socket)
     exit(errno);
   }
   *socket = s2;
+  printf("Connected from: %s: %d\n", inet_ntoa(skt->sin_addr), ntohs(skt->sin_port));
+}
+
+void
+start_server(int sd)
+{
+  printf("Start server\n");
+  struct myftph_data pkt;
+  size_t header_size = sizeof(struct myftph);
+  size_t recv_size;
+  if ((recv_size = recv(sd, &pkt, header_size, 0)) < 0) {
+    fprintf(stderr, "Error in recv: %s\n", strerror(errno));
+    exit(errno);
+  }
+  if (recv_size != header_size) {
+    fprintf(stderr, "Error: Invalid header size\n");
+    // TODO; CUT
+  }
+  printf("recv pkt: data length = %d\n", pkt.length);
+  print_hex((unsigned char *)&pkt, recv_size);
+  if (pkt.length > 0) {
+    int c = 0;
+    for (;;) {
+      if ((recv_size = recv(sd, ((void*) &pkt) + header_size + c, pkt.length - c, 0)) < 0) {
+        fprintf(stderr, "Error in recv data: %s\n", strerror(errno));
+        exit(errno);
+      }
+      c += recv_size;
+      if (c == pkt.length) {
+        break;
+      } else if (c < pkt.length) {
+        continue;
+      } else {
+        fprintf(stderr, "Error: oversize\n"); // unreachable
+        // TODO: CUT
+      }
+    }
+  }
+  switch (pkt.type) {
+    case TYPE_PWD:
+      {
+        printf("PWD\n");
+        break;
+      }
+  }
 }
 
 int
@@ -62,8 +108,7 @@ main(const int argc, const char *argv[])
       exit(errno);
     } else if (pid == 0) { // Child
       close(s);
-      const char *buf = "pyonpyon\n";
-      send(s2, buf, strlen(buf), 0);
+      start_server(s2);
       close(s2);
       break;
     } else { // Parent

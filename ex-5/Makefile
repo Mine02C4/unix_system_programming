@@ -13,7 +13,7 @@ all: $(CLIENT) $(SERVER)
 $(CLIENT): client.o common.o getargs.o
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(SERVER): server.o
+$(SERVER): server.o common.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 %.o: %.c

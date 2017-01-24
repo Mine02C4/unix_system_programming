@@ -22,7 +22,7 @@ void getargs(const char *input, int max, int *argc, char *argv[]);
 typedef void (* cmdfuncptr)(int, char**);
 
 void quitcmd(int, char**);
-//void pwdcmd(int, char**);
+void pwdcmd(int, char**);
 
 struct cmdinfo {
   char *name;
@@ -31,7 +31,7 @@ struct cmdinfo {
 
 const struct cmdinfo cmdarray[] = {
   {"quit",    quitcmd},
-//  {"pwd",     pwdcmd},
+  {"pwd",     pwdcmd},
 };
 
 void
@@ -65,7 +65,6 @@ cmdline()
   }
 }
 
-
 int s;
 
 void
@@ -73,6 +72,14 @@ quitcmd(int argc, char** argv)
 {
   close(s);
   exit(0);
+}
+
+void
+pwdcmd(int argc, char** argv)
+{
+  MYFTPPKT(pkt, TYPE_PWD, CODE_NULL);
+  print_hex((unsigned char *)&pkt, sizeof(pkt));
+  send_mypkt(s, &pkt);
 }
 
 void
@@ -93,13 +100,13 @@ setup_socket(const char *hostname)
     fprintf(stderr, "Error in opening socket: %s\n", strerror(errno));
     exit(errno);
   }
+  printf("Server: %s: %d\n",
+      inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr),
+      ntohs(((struct sockaddr_in *)res->ai_addr)->sin_port));
   if (connect(s, res->ai_addr, res->ai_addrlen) < 0) {
     fprintf(stderr, "Error in connect: %s\n", strerror(errno));
     exit(errno);
   }
-  printf("Server: %s: %d\n",
-      inet_ntoa(((struct sockaddr_in *)res->ai_addr)->sin_addr),
-      ntohs(((struct sockaddr_in *)res->ai_addr)->sin_port));
   freeaddrinfo(res);
 }
 
