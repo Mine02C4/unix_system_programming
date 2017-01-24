@@ -57,40 +57,61 @@ start_server(int sd)
   struct myftph_data pkt;
   size_t header_size = sizeof(struct myftph);
   size_t recv_size;
-  if ((recv_size = recv(sd, &pkt, header_size, 0)) < 0) {
-    fprintf(stderr, "Error in recv: %s\n", strerror(errno));
-    exit(errno);
-  }
-  if (recv_size != header_size) {
-    fprintf(stderr, "Error: Invalid header size\n");
-    // TODO; CUT
-  }
-  printf("recv pkt: data length = %d\n", pkt.length);
-  print_hex((unsigned char *)&pkt, recv_size);
-  if (pkt.length > 0) {
-    int c = 0;
-    for (;;) {
-      if ((recv_size = recv(sd, ((void*) &pkt) + header_size + c, pkt.length - c, 0)) < 0) {
-        fprintf(stderr, "Error in recv data: %s\n", strerror(errno));
-        exit(errno);
-      }
-      c += recv_size;
-      if (c == pkt.length) {
-        break;
-      } else if (c < pkt.length) {
-        continue;
-      } else {
-        fprintf(stderr, "Error: oversize\n"); // unreachable
-        // TODO: CUT
+  for (;;) {
+    if ((recv_size = recv(sd, &pkt, header_size, 0)) < 0) {
+      fprintf(stderr, "Error in recv: %s\n", strerror(errno));
+      exit(errno);
+    }
+    if (recv_size == 0) {
+      fprintf(stderr, "Connection refused.\n");
+      exit(1);
+    }
+    if (recv_size != header_size) {
+      fprintf(stderr, "Error: Invalid header size = %ld\n", recv_size);
+      // TODO; CUT
+      continue;
+    }
+    printf("recv pkt: data length = %d\n", pkt.length);
+    print_hex((unsigned char *)&pkt, recv_size);
+    if (pkt.length > 0) {
+      int c = 0;
+      for (;;) {
+        if ((recv_size = recv(sd, ((void*) &pkt) + header_size + c, pkt.length - c, 0)) < 0) {
+          fprintf(stderr, "Error in recv data: %s\n", strerror(errno));
+          exit(errno);
+        }
+        if (recv_size == 0) {
+          fprintf(stderr, "Connection refused.\n");
+          exit(1);
+        }
+        c += recv_size;
+        if (c == pkt.length) {
+          break;
+        } else if (c < pkt.length) {
+          continue;
+        } else {
+          fprintf(stderr, "Error: oversize\n"); // unreachable
+          // TODO: CUT
+        }
       }
     }
-  }
-  switch (pkt.type) {
-    case TYPE_PWD:
-      {
-        printf("PWD\n");
-        break;
-      }
+    switch (pkt.type) {
+      case TYPE_PWD:
+        {
+          printf("PWD\n");
+          MYFTPDATA(pkt, TYPE_OK, CODE_OK);
+          if (getcwd(pkt.data, MAX_DATASIZE) == NULL) {
+            fprintf(stderr, "Error in getcwd: %s\n", strerror(errno));
+            // TODO : CUT
+            exit(errno);
+          }
+          pkt.length = strlen(pkt.data);
+          printf("strlen = %ld\n dir = %s\n", strlen(pkt.data), pkt.data);
+          print_hex((unsigned char *)&pkt, sizeof(struct myftph) + pkt.length);
+          send_mydata(sd, &pkt);
+          break;
+        }
+    }
   }
 }
 

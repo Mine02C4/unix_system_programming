@@ -49,7 +49,9 @@ struct myftph_data {
 extern void myftph_init(struct myftph *pkt, uint8_t type, uint8_t code);
 extern void myftph_data_init(struct myftph_data *pkt, uint8_t type, uint8_t code);
 extern void send_mypkt(int socket, struct myftph *pkt);
+extern void send_mydata(int socket, struct myftph_data *pkt);
 extern void print_hex(const unsigned char *data, int length);
+extern int recv_myftp(int socket, struct myftph_data *pkt);
 
 #endif  // MYFTP_TYPES_H_
 

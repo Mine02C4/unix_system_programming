@@ -38,7 +38,7 @@ void
 cmdline()
 {
   char line[MAX_LINE];
-  while (1) {
+  for (;;) {
     printf("myFTP%% ");
     fflush(stdout);
     if (fgets(line, MAX_LINE, stdin) == NULL) {
@@ -68,6 +68,14 @@ cmdline()
 int s;
 
 void
+error_exit()
+{
+  fprintf(stderr, "Exit by error\n");
+  close(s);
+  exit(1);
+}
+
+void
 quitcmd(int argc, char** argv)
 {
   close(s);
@@ -80,6 +88,12 @@ pwdcmd(int argc, char** argv)
   MYFTPPKT(pkt, TYPE_PWD, CODE_NULL);
   print_hex((unsigned char *)&pkt, sizeof(pkt));
   send_mypkt(s, &pkt);
+  struct myftph_data rpkt;
+  if (recv_myftp(s, &rpkt) < 0) {
+    error_exit();
+  }
+  rpkt.data[rpkt.length] = '\0';
+  printf("%s\n", rpkt.data);
 }
 
 void
