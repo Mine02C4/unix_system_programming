@@ -227,6 +227,23 @@ ldircmd(int argc, char** argv)
     printf("%s\n", str_data);
     closedir(dir);
     free(str_data);
+  } else if (argc == 2) {
+    struct stat st;
+    if (stat(argv[1], &st) < 0) {
+      fprintf(stderr, "Error in stat: %s\n", strerror(errno));
+      return;
+    }
+    if (S_ISDIR(st.st_mode)) {
+      DIR *dir = opendir(argv[1]);
+      char *str_data = get_dirstr(dir, argv[1]);
+      printf("%s\n", str_data);
+      closedir(dir);
+      free(str_data);
+    } else {
+      char buf[1024];
+      get_filestr(buf, 1024, &st, argv[1]);
+      printf("%s\n", buf);
+    }
   }
 }
 

@@ -165,11 +165,9 @@ start_server(int sd)
               break;
             }
             if (S_ISDIR(st.st_mode)) {
-              printf("directory\n");
               dir = opendir(pkt.data);
               dirname = pkt.data;
             } else {
-              printf("FILE\n");
               MYFTPPKT(rpkt, TYPE_OK, CODE_OK_SC);
               send_mypkt(sd, &rpkt);
               MYFTPDATA(dpkt, TYPE_DATA, CODE_DEND);
