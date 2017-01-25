@@ -5,6 +5,8 @@
 #define MAX_DATASIZE 1024
 
 #include <stdint.h>
+
+#include <sys/stat.h>
 #include <dirent.h>
 
 #define TYPE_QUIT     0x01
@@ -54,7 +56,8 @@ extern void send_mydata(int socket, struct myftph_data *pkt);
 extern void send_byteseq(int socket, struct myftph_data *base, int code_continue, char *data, size_t length);
 extern void print_hex(const unsigned char *data, int length);
 extern int recv_myftp(int socket, struct myftph_data *pkt);
-extern char *get_dirstr(DIR * dir);
+extern char *get_dirstr(DIR * dir, const char *dirname);
+extern void get_filestr(char *buf, size_t buf_size, struct stat *st, const char *name);
 
 #endif  // MYFTP_TYPES_H_
 

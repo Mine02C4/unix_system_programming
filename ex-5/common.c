@@ -6,7 +6,6 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <errno.h>
 #include <unistd.h>
 
@@ -80,8 +79,6 @@ recv_myftp(int socket, struct myftph_data *pkt)
     fprintf(stderr, "Error: Invalid header size\n");
     return -1;
   }
-  printf("recv pkt: data length = %d\n", pkt->length);
-  print_hex((unsigned char *)pkt, recv_size);
   if (pkt->length > 0) {
     int c = 0;
     for (;;) {
@@ -90,8 +87,6 @@ recv_myftp(int socket, struct myftph_data *pkt)
         exit(errno);
       }
       c += recv_size;
-      printf("recv data c = %d\n", c);
-      print_hex((unsigned char *)pkt, header_size + c);
       if (c == pkt->length) {
         break;
       } else if (c < pkt->length) {
@@ -121,12 +116,14 @@ print_hex(const unsigned char *data, int length)
 }
 
 char *
-get_dirstr(DIR * dir)
+get_dirstr(DIR * dir, const char *dirname)
 {
   const size_t buf_size = 1024;
   char *str = (char *)malloc(buf_size * 2);
+  str[0] = '\0';
   size_t c_size = buf_size * 2;
   char buf[buf_size];
+  char filename[1024];
   struct stat st;
   struct dirent *de;
   if (str == NULL) {
@@ -134,63 +131,19 @@ get_dirstr(DIR * dir)
     exit(1);
   }
   for (de = readdir(dir); de != NULL; de = readdir(dir)) {
-    if (stat(de->d_name, &st) < 0) {
+    strcpy(filename, dirname);
+    size_t baselen = strlen(filename);
+    if (filename[baselen - 1] == '/') {
+      strcat(filename, de->d_name);
+    } else {
+      filename[baselen] = '/';
+      filename[baselen + 1] = '\0';
+      strcat(filename, de->d_name);
+    }
+    if (stat(filename, &st) < 0) {
       continue;
     } else {
-      if (st.st_mode & S_IFDIR) {
-        buf[0] = 'd';
-      } else if (st.st_mode & S_IFLNK) {
-        buf[0] = 'l';
-      } else {
-        buf[0] = '-';
-      }
-      if (st.st_mode & S_IRUSR) {
-        buf[1] = 'r';
-      } else {
-        buf[1] = '-';
-      }
-      if (st.st_mode & S_IWUSR) {
-        buf[2] = 'w';
-      } else {
-        buf[2] = '-';
-      }
-      if (st.st_mode & S_IXUSR) {
-        buf[3] = 'x';
-      } else {
-        buf[3] = '-';
-      }
-      if (st.st_mode & S_IRGRP) {
-        buf[4] = 'r';
-      } else {
-        buf[4] = '-';
-      }
-      if (st.st_mode & S_IWGRP) {
-        buf[5] = 'w';
-      } else {
-        buf[5] = '-';
-      }
-      if (st.st_mode & S_IXGRP) {
-        buf[6] = 'x';
-      } else {
-        buf[6] = '-';
-      }
-      if (st.st_mode & S_IROTH) {
-        buf[7] = 'r';
-      } else {
-        buf[7] = '-';
-      }
-      if (st.st_mode & S_IWOTH) {
-        buf[8] = 'w';
-      } else {
-        buf[8] = '-';
-      }
-      if (st.st_mode & S_IXOTH) {
-        buf[9] = 'x';
-      } else {
-        buf[9] = '-';
-      }
-      buf [10] = ' ';
-      snprintf(buf + 11, buf_size - 11, "%10ld %s\n", st.st_size, de->d_name);
+      get_filestr(buf, buf_size, &st, de->d_name);
       strcat(str, buf);
       if (c_size - strlen(str) - 1 < buf_size) {
         c_size += buf_size;
@@ -206,5 +159,64 @@ get_dirstr(DIR * dir)
     }
   }
   return str;
+}
+
+void
+get_filestr(char *buf, size_t buf_size, struct stat *st, const char *name)
+{
+  if (S_ISDIR(st->st_mode)) {
+    buf[0] = 'd';
+  } else if (S_ISLNK(st->st_mode)) {
+    buf[0] = 'l';
+  } else {
+    buf[0] = '-';
+  }
+  if (st->st_mode & S_IRUSR) {
+    buf[1] = 'r';
+  } else {
+    buf[1] = '-';
+  }
+  if (st->st_mode & S_IWUSR) {
+    buf[2] = 'w';
+  } else {
+    buf[2] = '-';
+  }
+  if (st->st_mode & S_IXUSR) {
+    buf[3] = 'x';
+  } else {
+    buf[3] = '-';
+  }
+  if (st->st_mode & S_IRGRP) {
+    buf[4] = 'r';
+  } else {
+    buf[4] = '-';
+  }
+  if (st->st_mode & S_IWGRP) {
+    buf[5] = 'w';
+  } else {
+    buf[5] = '-';
+  }
+  if (st->st_mode & S_IXGRP) {
+    buf[6] = 'x';
+  } else {
+    buf[6] = '-';
+  }
+  if (st->st_mode & S_IROTH) {
+    buf[7] = 'r';
+  } else {
+    buf[7] = '-';
+  }
+  if (st->st_mode & S_IWOTH) {
+    buf[8] = 'w';
+  } else {
+    buf[8] = '-';
+  }
+  if (st->st_mode & S_IXOTH) {
+    buf[9] = 'x';
+  } else {
+    buf[9] = '-';
+  }
+  buf[10] = ' ';
+  snprintf(buf + 11, buf_size - 11, "%10ld %s\n", st->st_size, name);
 }
 

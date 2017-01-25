@@ -38,6 +38,13 @@ setup_socket()
 }
 
 void
+force_disconnect(int sd)
+{
+  close(sd);
+  exit(1);
+}
+
+void
 wait_connect(struct sockaddr_in *skt, int *socket)
 {
   int s2;
@@ -68,7 +75,7 @@ start_server(int sd)
     }
     if (recv_size != header_size) {
       fprintf(stderr, "Error: Invalid header size = %ld\n", recv_size);
-      // TODO; CUT
+      force_disconnect(sd);
       continue;
     }
     printf("recv pkt: data length = %d\n", pkt.length);
@@ -91,7 +98,7 @@ start_server(int sd)
           continue;
         } else {
           fprintf(stderr, "Error: oversize\n"); // unreachable
-          // TODO: CUT
+          force_disconnect(sd);
         }
       }
     }
@@ -109,8 +116,7 @@ start_server(int sd)
           MYFTPDATA(pkt, TYPE_OK, CODE_OK);
           if (getcwd(pkt.data, MAX_DATASIZE) == NULL) {
             fprintf(stderr, "Error in getcwd: %s\n", strerror(errno));
-            // TODO : CUT
-            exit(errno);
+            force_disconnect(sd);
           }
           pkt.length = strlen(pkt.data);
           printf("strlen = %ld\n dir = %s\n", strlen(pkt.data), pkt.data);
@@ -139,14 +145,41 @@ start_server(int sd)
       case TYPE_LIST:
         {
           DIR *dir;
+          char *dirname;
           if (pkt.length == 0) {
             printf("LIST\n");
             dir = opendir(".");
+            dirname = ".";
           } else {
             pkt.data[pkt.length] = '\0';
             printf("LIST '%s'\n", pkt.data);
-            dir = opendir(pkt.data);
+            struct stat st;
+            if (stat(pkt.data, &st) < 0) {
+              MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
+              if (errno == EACCES) {
+                rpkt.code = CODE_DENIED;
+              } else {
+                rpkt.code = CODE_NOTEX;
+              }
+              send_mypkt(sd, &rpkt);
+              break;
+            }
+            if (S_ISDIR(st.st_mode)) {
+              printf("directory\n");
+              dir = opendir(pkt.data);
+              dirname = pkt.data;
+            } else {
+              printf("FILE\n");
+              MYFTPPKT(rpkt, TYPE_OK, CODE_OK_SC);
+              send_mypkt(sd, &rpkt);
+              MYFTPDATA(dpkt, TYPE_DATA, CODE_DEND);
+              get_filestr(dpkt.data, MAX_DATASIZE, &st, pkt.data);
+              dpkt.length = strlen(dpkt.data);
+              send_mydata(sd, &dpkt);
+              break;
+            }
           }
+          printf("Mode directory\n");
           if (dir == NULL) {
             MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
             if (errno == EACCES) {
@@ -156,21 +189,21 @@ start_server(int sd)
             }
             send_mypkt(sd, &rpkt);
           } else {
-            char *str_data = get_dirstr(dir);
+            char *str_data = get_dirstr(dir, dirname);
             closedir(dir);
+            printf("returndata\n%s\n", str_data);
             MYFTPPKT(rpkt, TYPE_OK, CODE_OK_SC);
             send_mypkt(sd, &rpkt);
             MYFTPDATA(dpkt, TYPE_DATA, CODE_DEND);
             send_byteseq(sd, &dpkt, CODE_DCONT, str_data, strlen(str_data));
+            free(str_data);
           }
           break;
         }
       default:
         {
           fprintf(stderr, "Unknown type\n");
-          // TODO: CUT
-          exit(1);
-          break;
+          force_disconnect(sd);
         }
     }
   }

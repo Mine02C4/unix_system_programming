@@ -197,15 +197,38 @@ dircmd(int argc, char** argv)
 
 void
 lpwdcmd(int argc, char** argv)
-{}
+{
+  char buf[1024];
+  if (getcwd(buf, 1024) == NULL) {
+    fprintf(stderr, "Error in getcwd: %s\n", strerror(errno));
+    return;
+  }
+  printf("%s\n", buf);
+}
 
 void
 lcdcmd(int argc, char** argv)
-{}
+{
+  if (argc == 2) {
+    if (chdir(argv[1]) < 0) {
+      fprintf(stderr, "Error in chdir: %s\n", strerror(errno));
+    }
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires 1 parameter.\n", argv[0]);
+  }
+}
 
 void
 ldircmd(int argc, char** argv)
-{}
+{
+  if (argc == 1) {
+    DIR *dir = opendir(".");
+    char *str_data = get_dirstr(dir, ".");
+    printf("%s\n", str_data);
+    closedir(dir);
+    free(str_data);
+  }
+}
 
 void
 getcmd(int argc, char** argv)
