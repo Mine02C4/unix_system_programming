@@ -6,7 +6,9 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <errno.h>
+#include <unistd.h>
 
 void
 myftph_init(struct myftph *pkt, uint8_t type, uint8_t code)
@@ -40,6 +42,28 @@ send_mydata(int socket, struct myftph_data *pkt)
   if (send(socket, pkt, pkt_size, 0) < 0) {
     fprintf(stderr, "Error in send: %s\n", strerror(errno));
     exit(1);
+  }
+}
+
+void
+send_byteseq(int socket, struct myftph_data *base, int code_continue, char *data, size_t length)
+{
+  size_t offset = 0;
+  const size_t block_size = MAX_DATASIZE;
+  int code_end = base->code;
+  for (; offset < length;) {
+    size_t next_size;
+    if (length - offset > block_size) {
+      base->code = code_continue;
+      next_size = block_size;
+    } else {
+      base->code = code_end;
+      next_size = length - offset;
+    }
+    memcpy(base->data, data + offset, next_size);
+    base->length = next_size;
+    send_mydata(socket, base);
+    offset += next_size;
   }
 }
 
@@ -96,4 +120,91 @@ print_hex(const unsigned char *data, int length)
   putchar('\n');
 }
 
+char *
+get_dirstr(DIR * dir)
+{
+  const size_t buf_size = 1024;
+  char *str = (char *)malloc(buf_size * 2);
+  size_t c_size = buf_size * 2;
+  char buf[buf_size];
+  struct stat st;
+  struct dirent *de;
+  if (str == NULL) {
+    fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
+    exit(1);
+  }
+  for (de = readdir(dir); de != NULL; de = readdir(dir)) {
+    if (stat(de->d_name, &st) < 0) {
+      continue;
+    } else {
+      if (st.st_mode & S_IFDIR) {
+        buf[0] = 'd';
+      } else if (st.st_mode & S_IFLNK) {
+        buf[0] = 'l';
+      } else {
+        buf[0] = '-';
+      }
+      if (st.st_mode & S_IRUSR) {
+        buf[1] = 'r';
+      } else {
+        buf[1] = '-';
+      }
+      if (st.st_mode & S_IWUSR) {
+        buf[2] = 'w';
+      } else {
+        buf[2] = '-';
+      }
+      if (st.st_mode & S_IXUSR) {
+        buf[3] = 'x';
+      } else {
+        buf[3] = '-';
+      }
+      if (st.st_mode & S_IRGRP) {
+        buf[4] = 'r';
+      } else {
+        buf[4] = '-';
+      }
+      if (st.st_mode & S_IWGRP) {
+        buf[5] = 'w';
+      } else {
+        buf[5] = '-';
+      }
+      if (st.st_mode & S_IXGRP) {
+        buf[6] = 'x';
+      } else {
+        buf[6] = '-';
+      }
+      if (st.st_mode & S_IROTH) {
+        buf[7] = 'r';
+      } else {
+        buf[7] = '-';
+      }
+      if (st.st_mode & S_IWOTH) {
+        buf[8] = 'w';
+      } else {
+        buf[8] = '-';
+      }
+      if (st.st_mode & S_IXOTH) {
+        buf[9] = 'x';
+      } else {
+        buf[9] = '-';
+      }
+      buf [10] = ' ';
+      snprintf(buf + 11, buf_size - 11, "%10ld %s\n", st.st_size, de->d_name);
+      strcat(str, buf);
+      if (c_size - strlen(str) - 1 < buf_size) {
+        c_size += buf_size;
+        char *str_t = (char *)malloc(c_size);
+        if (str_t == NULL) {
+          fprintf(stderr, "Memory error!! malloc returns NULL!!\n");
+          exit(1);
+        }
+        strcpy(str_t, str);
+        free(str);
+        str = str_t;
+      }
+    }
+  }
+  return str;
+}
 

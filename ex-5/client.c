@@ -23,6 +23,13 @@ typedef void (* cmdfuncptr)(int, char**);
 
 void quitcmd(int, char**);
 void pwdcmd(int, char**);
+void cdcmd(int, char**);
+void dircmd(int, char**);
+void lpwdcmd(int, char**);
+void lcdcmd(int, char**);
+void ldircmd(int, char**);
+void getcmd(int, char**);
+void putcmd(int, char**);
 
 struct cmdinfo {
   char *name;
@@ -32,6 +39,13 @@ struct cmdinfo {
 const struct cmdinfo cmdarray[] = {
   {"quit",    quitcmd},
   {"pwd",     pwdcmd},
+  {"cd",      cdcmd},
+  {"dir",     dircmd},
+  {"lpwd",    lpwdcmd},
+  {"lcd",     lcdcmd},
+  {"ldir",    ldircmd},
+  {"get",     getcmd},
+  {"put",     putcmd},
 };
 
 void
@@ -78,6 +92,9 @@ error_exit()
 void
 quitcmd(int argc, char** argv)
 {
+  MYFTPPKT(pkt, TYPE_QUIT, CODE_NULL);
+  print_hex((unsigned char *)&pkt, sizeof(pkt));
+  send_mypkt(s, &pkt);
   close(s);
   exit(0);
 }
@@ -95,6 +112,108 @@ pwdcmd(int argc, char** argv)
   rpkt.data[rpkt.length] = '\0';
   printf("%s\n", rpkt.data);
 }
+
+void
+cdcmd(int argc, char** argv)
+{
+  if (argc == 2) {
+    MYFTPDATA(pkt, TYPE_CWD, CODE_NULL);
+    int len = strlen(argv[1]);
+    strncpy(pkt.data, argv[1], len);
+    pkt.length = len;
+    send_mydata(s, &pkt);
+    struct myftph_data rpkt;
+    if (recv_myftp(s, &rpkt) < 0) {
+      error_exit();
+    }
+    if (rpkt.type == TYPE_OK) {
+      printf("OK\n");
+    } else if (rpkt.type == TYPE_FILE_ERR) {
+      if (rpkt.code == CODE_NOTEX) {
+        fprintf(stderr, "Not found\n");
+      } else if (rpkt.code == CODE_DENIED) {
+        fprintf(stderr, "Access denied\n");
+      } else {
+        fprintf(stderr, "Invalid error code = %d\n", rpkt.code);
+      }
+    } else {
+      fprintf(stderr, "Invalid type\n");
+    }
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires 1 parameter.\n", argv[0]);
+  }
+}
+void
+dircmd(int argc, char** argv)
+{
+  if (argc == 1 || argc == 2) {
+    MYFTPDATA(pkt, TYPE_LIST, CODE_NULL);
+    if (argc == 2) {
+      int len = strlen(argv[1]);
+      strncpy(pkt.data, argv[1], len);
+      pkt.length = len;
+    }
+    send_mydata(s, &pkt);
+    struct myftph_data rpkt;
+    if (recv_myftp(s, &rpkt) < 0) {
+      error_exit();
+    }
+    rpkt.data[rpkt.length] = '\0';
+    printf("%s\n", rpkt.data);
+    if (rpkt.type == TYPE_OK) {
+      if (rpkt.code == CODE_OK_SC) {
+        struct myftph_data dpkt;
+        for (;;) {
+          if (recv_myftp(s, &dpkt) < 0) {
+            error_exit();
+            break;
+          }
+          char buf[MAX_DATASIZE + 1];
+          memcpy(buf, dpkt.data, dpkt.length);
+          buf[dpkt.length] = '\0';
+          printf("%s", buf);
+          if (dpkt.code == CODE_DEND) {
+            break;
+          }
+        }
+      } else {
+        printf("OK but no data\n");
+      }
+    } else if (rpkt.type == TYPE_FILE_ERR) {
+      if (rpkt.code == CODE_NOTEX) {
+        fprintf(stderr, "Not found\n");
+      } else if (rpkt.code == CODE_DENIED) {
+        fprintf(stderr, "Access denied\n");
+      } else {
+        fprintf(stderr, "Invalid error code = %d\n", rpkt.code);
+      }
+    } else {
+      fprintf(stderr, "Invalid type\n");
+    }
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires 0 or 1 parameter.\n", argv[0]);
+  }
+}
+
+void
+lpwdcmd(int argc, char** argv)
+{}
+
+void
+lcdcmd(int argc, char** argv)
+{}
+
+void
+ldircmd(int argc, char** argv)
+{}
+
+void
+getcmd(int argc, char** argv)
+{}
+
+void
+putcmd(int argc, char** argv)
+{}
 
 void
 setup_socket(const char *hostname)

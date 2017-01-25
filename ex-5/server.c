@@ -96,6 +96,13 @@ start_server(int sd)
       }
     }
     switch (pkt.type) {
+      case TYPE_QUIT:
+        {
+          printf("QUIT\n");
+          close(sd);
+          exit(0);
+          break;
+        }
       case TYPE_PWD:
         {
           printf("PWD\n");
@@ -109,6 +116,60 @@ start_server(int sd)
           printf("strlen = %ld\n dir = %s\n", strlen(pkt.data), pkt.data);
           print_hex((unsigned char *)&pkt, sizeof(struct myftph) + pkt.length);
           send_mydata(sd, &pkt);
+          break;
+        }
+      case TYPE_CWD:
+        {
+          pkt.data[pkt.length] = '\0';
+          printf("CWD '%s'\n", pkt.data);
+          if (chdir(pkt.data) < 0) {
+            MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
+            if (errno == EACCES) {
+              rpkt.code = CODE_DENIED;
+            } else {
+              rpkt.code = CODE_NOTEX;
+            }
+            send_mypkt(sd, &rpkt);
+          } else {
+            MYFTPPKT(rpkt, TYPE_OK, CODE_OK);
+            send_mypkt(sd, &rpkt);
+          }
+          break;
+        }
+      case TYPE_LIST:
+        {
+          DIR *dir;
+          if (pkt.length == 0) {
+            printf("LIST\n");
+            dir = opendir(".");
+          } else {
+            pkt.data[pkt.length] = '\0';
+            printf("LIST '%s'\n", pkt.data);
+            dir = opendir(pkt.data);
+          }
+          if (dir == NULL) {
+            MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
+            if (errno == EACCES) {
+              rpkt.code = CODE_DENIED;
+            } else {
+              rpkt.code = CODE_NOTEX;
+            }
+            send_mypkt(sd, &rpkt);
+          } else {
+            char *str_data = get_dirstr(dir);
+            closedir(dir);
+            MYFTPPKT(rpkt, TYPE_OK, CODE_OK_SC);
+            send_mypkt(sd, &rpkt);
+            MYFTPDATA(dpkt, TYPE_DATA, CODE_DEND);
+            send_byteseq(sd, &dpkt, CODE_DCONT, str_data, strlen(str_data));
+          }
+          break;
+        }
+      default:
+        {
+          fprintf(stderr, "Unknown type\n");
+          // TODO: CUT
+          exit(1);
           break;
         }
     }
