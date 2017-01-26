@@ -202,7 +202,7 @@ start_server(int sd)
           } else {
             int fd;
             pkt.data[pkt.length] = '\0';
-            printf("RETR '%s'\n" pkt.data);
+            printf("RETR '%s'\n", pkt.data);
             if ((fd = open(pkt.data, O_RDONLY)) < 0) {
               MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
               if (errno == EACCES) {
@@ -243,7 +243,7 @@ start_server(int sd)
           } else {
             int fd;
             pkt.data[pkt.length] = '\0';
-            printf("STOR '%s'\n" pkt.data);
+            printf("STOR '%s'\n", pkt.data);
             if ((fd = open(pkt.data, O_WRONLY|O_CREAT|O_EXCL, 0644)) < 0) {
               MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
               if (errno == EACCES) {
