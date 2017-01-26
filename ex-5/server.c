@@ -292,6 +292,17 @@ start_server(int sd)
 int
 main(const int argc, const char *argv[])
 {
+  if (argc > 2) {
+    fprintf(stderr, "Invalid arguments.\n");
+    fprintf(stderr, "Usase: ./myftpd [<working-directory>]\n");
+    exit(1);
+  }
+  if (argc == 2) {
+    if (chdir(argv[1]) < 0) {
+      fprintf(stderr, "Error in chdir: %s\n", strerror(errno));
+      exit(errno);
+    }
+  }
   setup_socket();
   for (;;) {
     struct sockaddr_in skt;
