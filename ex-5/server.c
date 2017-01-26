@@ -79,8 +79,6 @@ start_server(int sd)
       force_disconnect(sd);
       continue;
     }
-    printf("recv pkt: data length = %d\n", pkt.length);
-    print_hex((unsigned char *)&pkt, recv_size);
     if (pkt.length > 0) {
       int c = 0;
       for (;;) {
@@ -178,7 +176,6 @@ start_server(int sd)
               break;
             }
           }
-          printf("Mode directory\n");
           if (dir == NULL) {
             MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
             if (errno == EACCES) {
@@ -190,7 +187,6 @@ start_server(int sd)
           } else {
             char *str_data = get_dirstr(dir, dirname);
             closedir(dir);
-            printf("returndata\n%s\n", str_data);
             MYFTPPKT(rpkt, TYPE_OK, CODE_OK_SC);
             send_mypkt(sd, &rpkt);
             send_byteseq(sd, str_data, strlen(str_data));
@@ -204,9 +200,9 @@ start_server(int sd)
             MYFTPPKT(rpkt, TYPE_CMD_ERR, CODE_SYNTAXE);
             send_mypkt(sd, &rpkt);
           } else {
-            printf("RETR\n");
             int fd;
             pkt.data[pkt.length] = '\0';
+            printf("RETR '%s'\n" pkt.data);
             if ((fd = open(pkt.data, O_RDONLY)) < 0) {
               MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
               if (errno == EACCES) {
@@ -245,9 +241,9 @@ start_server(int sd)
             MYFTPPKT(rpkt, TYPE_CMD_ERR, CODE_SYNTAXE);
             send_mypkt(sd, &rpkt);
           } else {
-            printf("STOR\n");
             int fd;
             pkt.data[pkt.length] = '\0';
+            printf("STOR '%s'\n" pkt.data);
             if ((fd = open(pkt.data, O_WRONLY|O_CREAT|O_EXCL, 0644)) < 0) {
               MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
               if (errno == EACCES) {

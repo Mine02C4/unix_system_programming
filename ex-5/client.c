@@ -93,7 +93,6 @@ void
 quitcmd(int argc, char** argv)
 {
   MYFTPPKT(pkt, TYPE_QUIT, CODE_NULL);
-  print_hex((unsigned char *)&pkt, sizeof(pkt));
   send_mypkt(s, &pkt);
   close(s);
   exit(0);
@@ -103,7 +102,6 @@ void
 pwdcmd(int argc, char** argv)
 {
   MYFTPPKT(pkt, TYPE_PWD, CODE_NULL);
-  print_hex((unsigned char *)&pkt, sizeof(pkt));
   send_mypkt(s, &pkt);
   struct myftph_data rpkt;
   if (recv_myftp(s, &rpkt) < 0) {

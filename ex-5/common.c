@@ -96,8 +96,6 @@ recv_myftp(int socket, struct myftph_data *pkt)
         return -1;
       }
     }
-    printf("recv with data length = %d\n", c);
-    print_hex((unsigned char *)pkt, header_size + c);
   }
   return 0;
 }
