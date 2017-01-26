@@ -45,23 +45,23 @@ send_mydata(int socket, struct myftph_data *pkt)
 }
 
 void
-send_byteseq(int socket, struct myftph_data *base, int code_continue, char *data, size_t length)
+send_byteseq(int socket, char *data, size_t length)
 {
+  MYFTPDATA(pkt, TYPE_DATA, CODE_DEND);
   size_t offset = 0;
   const size_t block_size = MAX_DATASIZE;
-  int code_end = base->code;
   for (; offset < length;) {
     size_t next_size;
     if (length - offset > block_size) {
-      base->code = code_continue;
+      pkt.code = CODE_DCONT;
       next_size = block_size;
     } else {
-      base->code = code_end;
+      pkt.code = CODE_DEND;
       next_size = length - offset;
     }
-    memcpy(base->data, data + offset, next_size);
-    base->length = next_size;
-    send_mydata(socket, base);
+    memcpy(pkt.data, data + offset, next_size);
+    pkt.length = next_size;
+    send_mydata(socket, &pkt);
     offset += next_size;
   }
 }

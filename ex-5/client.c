@@ -1,6 +1,5 @@
 #include "client.h"
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +9,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netdb.h>
 #include <unistd.h>
 
@@ -244,12 +244,71 @@ ldircmd(int argc, char** argv)
       get_filestr(buf, 1024, &st, argv[1]);
       printf("%s\n", buf);
     }
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires 0 or 1 parameter.\n", argv[0]);
   }
 }
 
 void
 getcmd(int argc, char** argv)
-{}
+{
+  char *src, *dst;
+  if (argc == 2) {
+    src = argv[1];
+    dst = argv[1];
+  } else if (argc == 3) {
+    src = argv[1];
+    dst = argv[2];
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires 1 or 2 parameters.\n", argv[0]);
+    return;
+  }
+  int fd;
+  if ((fd = open(dst, O_WRONLY|O_CREAT|O_EXCL, 0644)) < 0) {
+    fprintf(stderr, "Error in open dst: %s\n", strerror(errno));
+    return;
+  }
+  MYFTPDATA(pkt, TYPE_RETR, CODE_NULL);
+  int len = strlen(src);
+  strncpy(pkt.data, src, len);
+  pkt.length = len;
+  send_mydata(s, &pkt);
+  struct myftph_data rpkt;
+  if (recv_myftp(s, &rpkt) < 0) {
+    error_exit();
+  }
+  if (rpkt.type == TYPE_OK) {
+    if (rpkt.code == CODE_OK_SC) {
+      struct myftph_data dpkt;
+      for (;;) {
+        if (recv_myftp(s, &dpkt) < 0) {
+          error_exit();
+          break;
+        }
+        if (write(fd, dpkt.data, dpkt.length) < 0) {
+          fprintf(stderr, "Error in write: %s\n", strerror(errno));
+          error_exit();
+        }
+        if (dpkt.code == CODE_DEND) {
+          break;
+        }
+      }
+    } else {
+      printf("OK but no data\n");
+    }
+  } else if (rpkt.type == TYPE_FILE_ERR) {
+    if (rpkt.code == CODE_NOTEX) {
+      fprintf(stderr, "Not found\n");
+    } else if (rpkt.code == CODE_DENIED) {
+      fprintf(stderr, "Access denied\n");
+    } else {
+      fprintf(stderr, "Invalid error code = %d\n", rpkt.code);
+    }
+  } else {
+    fprintf(stderr, "Invalid type\n");
+  }
+  close(fd);
+}
 
 void
 putcmd(int argc, char** argv)

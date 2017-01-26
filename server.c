@@ -235,7 +235,6 @@ start_server(int sd)
                 break;
               }
             }
-            close(fd);
           }
           break;
         }
