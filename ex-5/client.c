@@ -312,7 +312,66 @@ getcmd(int argc, char** argv)
 
 void
 putcmd(int argc, char** argv)
-{}
+{
+  char *src, *dst;
+  if (argc == 2) {
+    src = argv[1];
+    dst = argv[1];
+  } else if (argc == 3) {
+    src = argv[1];
+    dst = argv[2];
+  } else {
+    fprintf(stderr, "Invalid argument: Command '%s' requires 1 or 2 parameters.\n", argv[0]);
+    return;
+  }
+  int fd;
+  if ((fd = open(src, O_RDONLY)) < 0) {
+    fprintf(stderr, "Error in open src: %s\n", strerror(errno));
+    return;
+  }
+  MYFTPDATA(pkt, TYPE_STOR, CODE_NULL);
+  int len = strlen(dst);
+  strncpy(pkt.data, dst, len);
+  pkt.length = len;
+  send_mydata(s, &pkt);
+  struct myftph_data rpkt;
+  if (recv_myftp(s, &rpkt) < 0) {
+    error_exit();
+  }
+  if (rpkt.type == TYPE_OK) {
+    if (rpkt.code == CODE_OK_CS) {
+      MYFTPDATA(dpkt, TYPE_DATA, CODE_DCONT);
+      size_t rsize;
+      for (;;) {
+        if ((rsize = read(fd, dpkt.data, MAX_DATASIZE)) < 0) {
+          fprintf(stderr, "Error in read: %s\n", strerror(errno));
+          error_exit();
+        }
+        if (rsize < MAX_DATASIZE) {
+          dpkt.code = CODE_DEND;
+        }
+        dpkt.length = rsize;
+        send_mydata(s, &dpkt);
+        if (rsize < MAX_DATASIZE) {
+          break;
+        }
+      }
+    } else {
+      printf("OK but no data\n");
+    }
+  } else if (rpkt.type == TYPE_FILE_ERR) {
+    if (rpkt.code == CODE_NOTEX) {
+      fprintf(stderr, "Not found\n");
+    } else if (rpkt.code == CODE_DENIED) {
+      fprintf(stderr, "Access denied\n");
+    } else {
+      fprintf(stderr, "Invalid error code = %d\n", rpkt.code);
+    }
+  } else {
+    fprintf(stderr, "Invalid type\n");
+  }
+  close(fd);
+}
 
 void
 setup_socket(const char *hostname)

@@ -239,6 +239,45 @@ start_server(int sd)
           }
           break;
         }
+      case TYPE_STOR:
+        {
+          if (pkt.length == 0) {
+            MYFTPPKT(rpkt, TYPE_CMD_ERR, CODE_SYNTAXE);
+            send_mypkt(sd, &rpkt);
+          } else {
+            printf("STOR\n");
+            int fd;
+            pkt.data[pkt.length] = '\0';
+            if ((fd = open(pkt.data, O_WRONLY|O_CREAT|O_EXCL, 0644)) < 0) {
+              MYFTPPKT(rpkt, TYPE_FILE_ERR, CODE_NULL);
+              if (errno == EACCES) {
+                rpkt.code = CODE_DENIED;
+              } else {
+                rpkt.code = CODE_NOTEX;
+              }
+              send_mypkt(sd, &rpkt);
+              break;
+            }
+            MYFTPPKT(rpkt, TYPE_OK, CODE_OK_CS);
+            send_mypkt(sd, &rpkt);
+            struct myftph_data dpkt;
+            for (;;) {
+              if (recv_myftp(sd, &dpkt) < 0) {
+                force_disconnect(sd);
+                break;
+              }
+              if (write(fd, dpkt.data, dpkt.length) < 0) {
+                fprintf(stderr, "Error in write: %s\n", strerror(errno));
+                force_disconnect(sd);
+              }
+              if (dpkt.code == CODE_DEND) {
+                break;
+              }
+            }
+            close(fd);
+          }
+          break;
+        }
       default:
         {
           fprintf(stderr, "Unknown type\n");
